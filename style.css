@@ -116,29 +116,31 @@ label{
 
 /* ---------- Auth screen ---------- */
 #auth-view{
-  #auth-view{
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:24px;
-  position:relative;
-  overflow:hidden;
-  background:
-    radial-gradient(600px 400px at 12% 8%, rgba(79,70,229,0.12), transparent 60%),
-    radial-gradient(500px 380px at 88% 92%, rgba(14,159,110,0.10), transparent 60%),
-    var(--bg);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  /* Deep tech overlay + Official administrative building background */
+  background: linear-gradient(rgba(20, 22, 26, 0.8), rgba(79, 70, 229, 0.7)),
+              url('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat fixed;
 }
 .auth-card{
-  background:var(--surface);
-  width:100%;
-  max-width:400px;
-  border-radius:var(--radius-lg);
-  padding:40px 34px;
-  box-shadow:var(--shadow-lg);
-  border:1px solid var(--border);
-  position:relative;
-  z-index:1;
+  /* Glassmorphism Effect */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--radius-lg);
+  padding: 40px 34px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 1;
 }
 .brand{
   font-family:'JetBrains Mono',monospace;
