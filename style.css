@@ -42,6 +42,23 @@ body{
 
 .hidden{display:none !important;}
 
+/* --- SaaS ANIMATIONS --- */
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
 button{
   font-family:'Inter',sans-serif;
   cursor:pointer;
@@ -115,7 +132,7 @@ label{
 .btn-link:hover{color:var(--primary-hover);}
 
 /* ---------- Auth screen ---------- */
-#auth-view{
+#auth-view {
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -123,17 +140,15 @@ label{
   padding: 24px;
   position: relative;
   overflow: hidden;
-  /* Deep tech overlay + Official administrative building background */
   background: linear-gradient(rgba(20, 22, 26, 0.8), rgba(79, 70, 229, 0.7)),
               url('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat fixed;
 }
-.auth-card{
-  /* Glassmorphism Effect */
+
+.auth-card {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  
   width: 100%;
   max-width: 400px;
   border-radius: var(--radius-lg);
@@ -141,6 +156,8 @@ label{
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
   position: relative;
   z-index: 1;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
 }
 .brand{
   font-family:'JetBrains Mono',monospace;
@@ -232,7 +249,13 @@ main{max-width:1080px;margin:0 auto;padding:28px;}
   padding:22px;
   margin-bottom:24px;
   box-shadow:var(--shadow-sm);
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
 }
+.panel:nth-child(1) { animation-delay: 0.1s; }
+.panel:nth-child(2) { animation-delay: 0.2s; }
+.panel:nth-child(3) { animation-delay: 0.3s; }
+
 .panel h2{
   font-family:'Sora',sans-serif;
   font-weight:700;
@@ -409,13 +432,71 @@ tbody tr:last-child td{border-bottom:none;}
 .msg.ok{color:var(--success);}
 .msg.err{color:var(--danger);}
 
-.employee-list{list-style:none;margin:0;padding:0;}
-.employee-list li{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:12px 0;border-bottom:1px solid var(--border);font-size:14px;
+/* ---------- 3D Employee ID Cards ---------- */
+.panel:has(.employee-list) {
+  perspective: 1200px; 
 }
-.employee-list li:last-child{border-bottom:none;}
-.employee-list .e-email{color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace;}
+
+.employee-list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.employee-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 30px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  
+  box-shadow: 0 10px 25px rgba(20, 22, 26, 0.05);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
+  transform-style: preserve-3d;
+  position: relative;
+}
+
+/* Simulated ID Card Header Badge */
+.employee-list li::before {
+  content: 'OFFICIAL ID';
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 4px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  transform: translateZ(20px); 
+}
+
+/* 3D Hover Effect */
+.employee-list li:hover {
+  transform: translateY(-10px) rotateX(10deg) rotateY(-5deg) scale(1.03);
+  box-shadow: 15px 25px 45px rgba(79, 70, 229, 0.15);
+  border-color: var(--primary);
+  z-index: 2;
+}
+
+.employee-list .e-email {
+  color: var(--muted);
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 8px;
+  font-weight: 500;
+  transform: translateZ(15px); 
+}
 
 .history-entry{
   padding:10px 0;
