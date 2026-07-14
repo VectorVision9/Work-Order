@@ -126,7 +126,11 @@ $('signup-form').addEventListener('submit', async (e) => {
     role: 'boss'
   });
   if (profileError) {
-    $('signup-error').textContent = profileError.message;
+    if (profileError.code === '42501') {
+      $('signup-error').textContent = 'A boss account already exists for this site. If this is your business, ask your boss for a login instead.';
+    } else {
+      $('signup-error').textContent = profileError.message;
+    }
     return;
   }
   await onLoggedIn(data.user);
@@ -162,11 +166,40 @@ async function loadEmployees() {
   } else {
     employeesCache.forEach(emp => {
       const li = document.createElement('li');
-      li.innerHTML = `<span>${escapeHtml(emp.full_name)}</span><span class="e-email">${escapeHtml(emp.email || '')}</span>`;
+      li.innerHTML = `<span>${escapeHtml(emp.full_name)}</span><span style="display:flex;align-items:center;gap:12px;"><span class="e-email">${escapeHtml(emp.email || '')}</span><button class="btn-danger-text" data-remove-emp="${emp.id}" data-emp-name="${escapeHtml(emp.full_name)}">Remove</button></span>`;
       list.appendChild(li);
     });
   }
   $('employee-count-tag').textContent = employeesCache.length;
+
+  list.querySelectorAll('button[data-remove-emp]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.empName;
+      const confirmed = confirm(
+        `Remove ${name}?\n\nThey will no longer appear in your employee list or be able to use the app. ` +
+        `Any tasks currently assigned to them will show as "Unassigned" so you can hand them to someone else. ` +
+        `Their past task history is kept.`
+      );
+      if (!confirmed) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Removing...';
+      const { error } = await sb
+        .from('profiles')
+        .delete()
+        .eq('id', btn.dataset.removeEmp)
+        .eq('role', 'employee');
+
+      if (error) {
+        alert('Could not remove employee: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Remove';
+        return;
+      }
+      await loadEmployees();
+      await loadTasks();
+    });
+  });
 
   // dropdowns
   const assignSelect = $('assign-employee');
@@ -213,7 +246,7 @@ function renderTasksTable() {
     const badgeText = t.status === 'complete' ? 'Complete' : (overdue ? 'Overdue' : 'Pending');
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(t.employee?.full_name || '—')}</td>
+      <td>${escapeHtml(t.employee?.full_name || 'Unassigned')}</td>
       <td><strong>${escapeHtml(t.title)}</strong>${t.description ? `<div style="color:#5B6472;font-size:12px;margin-top:4px;">${escapeHtml(t.description)}</div>` : ''}</td>
       <td>${formatDate(t.deadline)}</td>
       <td><span class="badge ${badgeClass}">${badgeText}</span></td>
@@ -341,7 +374,7 @@ $('download-pdf-btn').addEventListener('click', () => {
     const overdue = t.status === 'pending' && isPast(t.deadline);
     const statusLabel = t.status === 'complete' ? 'Complete' : (overdue ? 'Overdue' : 'Pending');
     return [
-      t.employee?.full_name || '—',
+      t.employee?.full_name || 'Unassigned',
       t.title,
       formatDate(t.deadline),
       statusLabel,
