@@ -116,6 +116,7 @@ label{
 
 /* ---------- Auth screen ---------- */
 #auth-view{
+  #auth-view{
   min-height:100vh;
   display:flex;
   align-items:center;
