@@ -236,7 +236,7 @@ function renderTasksTable() {
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No tasks match this view yet.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No tasks match this view yet.</td></tr>';
     return;
   }
 
@@ -251,13 +251,32 @@ function renderTasksTable() {
       <td>${formatDate(t.deadline)}</td>
       <td><span class="badge ${badgeClass}">${badgeText}</span></td>
       <td>${formatDate(t.created_at)}</td>
-      <td><button class="btn-text-small" data-history="${t.id}" data-title="${escapeHtml(t.title)}">View</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn-text-small" data-history="${t.id}" data-title="${escapeHtml(t.title)}">View</button>
+        &nbsp;·&nbsp;
+        <button class="btn-danger-text" data-delete-task="${t.id}" data-task-title="${escapeHtml(t.title)}">Delete</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 
   tbody.querySelectorAll('button[data-history]').forEach(btn => {
     btn.addEventListener('click', () => openHistoryModal(btn.dataset.history, btn.dataset.title));
+  });
+
+  tbody.querySelectorAll('button[data-delete-task]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ok = confirm(`Delete "${btn.dataset.taskTitle}"? This permanently removes the task and its history. This cannot be undone.`);
+      if (!ok) return;
+      btn.disabled = true;
+      const { error } = await sb.from('tasks').delete().eq('id', btn.dataset.deleteTask);
+      if (error) {
+        alert('Could not delete task: ' + error.message);
+        btn.disabled = false;
+        return;
+      }
+      await loadTasks();
+    });
   });
 }
 
