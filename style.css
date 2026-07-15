@@ -933,7 +933,7 @@ tbody tr:last-child td{border-bottom:none;}
    EMPLOYEE DASHBOARD — cool ambient dark theme
    ========================================================= */
 body.employee-mode #app-view{
-  background:#070E1A;
+  background:#3e4757;
   position:relative;
 }
 body.employee-mode #app-view::before{
