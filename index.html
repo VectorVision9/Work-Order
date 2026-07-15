@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Order — Task Tracker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ========================= AUTH ========================= -->
+<div id="auth-view">
+  <div class="auth-card">
+    <div class="brand">WORK ORDER</div>
+
+    <!-- Login form -->
+    <div id="login-box">
+      <h1>Log in</h1>
+      <form id="login-form">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="login-email" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn-primary" style="width:100%;">Log in</button>
+        <div class="auth-error" id="login-error"></div>
+      </form>
+      <div class="auth-toggle">
+        First time setting up this site?
+        <button class="btn-link" id="show-signup">Create the boss account</button>
+      </div>
+    </div>
+
+    <!-- Boss signup form (first-time setup only) -->
+    <div id="signup-box" class="hidden">
+      <h1>Create boss account</h1>
+      <form id="signup-form">
+        <div class="field">
+          <label>Your name</label>
+          <input type="text" id="signup-name" required>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="signup-email" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Password (min 6 characters)</label>
+          <input type="password" id="signup-password" required minlength="6" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-primary" style="width:100%;">Create account</button>
+        <div class="auth-error" id="signup-error"></div>
+      </form>
+      <div class="auth-toggle">
+        Already set up?
+        <button class="btn-link" id="show-login">Back to log in</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= APP ========================= -->
+<div id="app-view" class="hidden">
+  <div class="topbar">
+    <div>
+      <div class="brand">WORK ORDER</div>
+      <h1 id="app-title">Task Tracker</h1>
+    </div>
+    <div class="topbar-right">
+      <span class="who" id="who-label"></span>
+      <button id="change-pw-btn">Change password</button>
+      <button id="logout-btn">Log out</button>
+    </div>
+  </div>
+
+  <main>
+    <!-- ---------- BOSS DASHBOARD ---------- -->
+    <div id="boss-view" class="hidden">
+
+      <div class="panel">
+        <h2>Assign a task <span class="tag">NEW</span></h2>
+        <form id="assign-form">
+          <div class="row3">
+            <div class="field" style="margin-bottom:0;">
+              <label>Employee</label>
+              <select id="assign-employee" required></select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Deadline</label>
+              <input type="date" id="assign-deadline" required>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Task title</label>
+              <input type="text" id="assign-title" required placeholder="e.g. Update client invoice">
+            </div>
+            <button type="submit" class="btn-primary">Assign</button>
+          </div>
+          <div class="field" style="margin-top:14px;">
+            <label>Details (optional)</label>
+            <textarea id="assign-desc" rows="2" placeholder="Any extra instructions..."></textarea>
+          </div>
+          <div class="msg" id="assign-msg"></div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Notices &amp; Announcements <span class="tag" id="notice-count-tag">0</span></h2>
+        <form id="notice-form">
+          <div class="field">
+            <label>Title</label>
+            <input type="text" id="notice-title" required placeholder="e.g. Office closed Friday">
+          </div>
+          <div class="field">
+            <label>Message</label>
+            <textarea id="notice-message" rows="2" required placeholder="Details for the team..."></textarea>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="notice-pinned"> Pin to top
+          </label>
+          <button type="submit" class="btn-primary" style="margin-top:12px;">Post notice</button>
+          <div class="msg" id="notice-msg"></div>
+        </form>
+        <div class="notice-list" id="notice-list-boss" style="margin-top:20px;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Employees <span class="tag" id="employee-count-tag">0</span></h2>
+        <div class="id-card-grid" id="employee-list"></div>
+        <button class="btn-secondary" id="open-add-employee" style="margin-top:14px;">+ Add new employee</button>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <h2 style="margin:0;">All tasks</h2>
+          <div class="filters">
+            <select id="filter-employee"><option value="">All employees</option></select>
+            <select id="filter-status">
+              <option value="">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="complete">Complete</option>
+            </select>
+            <button class="btn-secondary" id="download-pdf-btn">Download PDF report</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Employee</th><th>Task</th><th>Deadline</th><th>Status</th><th>Assigned</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="tasks-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---------- EMPLOYEE DASHBOARD (shared clipboard) ---------- -->
+    <div id="employee-view" class="hidden">
+      <div class="id-card-grid employee-id-strip" id="employee-id-strip"></div>
+
+      <div class="panel">
+        <h2>Notices <span class="tag" id="notice-count-tag-emp">0</span></h2>
+        <div class="notice-list" id="notice-list-emp"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Team clipboard <span class="tag" id="my-task-count">0</span></h2>
+        <p style="color:#5B6472;font-size:13px;margin-top:-8px;margin-bottom:18px;">
+          Every task given to the team shows up here. You can only act on tasks assigned to <strong>you</strong>.
+        </p>
+        <div class="ticket-grid" id="my-tickets"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ---------- Add employee modal ---------- -->
+<div id="add-employee-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Add new employee</h2>
+    <form id="add-employee-form">
+      <div class="field">
+        <label>Full name</label>
+        <input type="text" id="ae-name" required>
+      </div>
+      <div class="field">
+        <label>Email (their login)</label>
+        <input type="email" id="ae-email" required>
+      </div>
+      <div class="field">
+        <label>Temporary password (min 6 characters)</label>
+        <input type="text" id="ae-password" required minlength="6">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Designation</label>
+          <input type="text" id="ae-designation" placeholder="e.g. Sales Executive">
+        </div>
+        <div class="field">
+          <label>Department</label>
+          <input type="text" id="ae-department" placeholder="e.g. Sales">
+        </div>
+      </div>
+      <div class="field">
+        <label>Mobile</label>
+        <input type="tel" id="ae-mobile" placeholder="e.g. 98765 43210">
+      </div>
+
+      <div class="field">
+        <label>ID card theme</label>
+        <div class="swatch-row" id="ae-theme-swatches">
+          <button type="button" class="swatch theme-navy selected" data-theme="navy" title="Deep Navy"></button>
+          <button type="button" class="swatch theme-glass" data-theme="glass" title="Glass White"></button>
+          <button type="button" class="swatch theme-neon-blue" data-theme="neon-blue" title="Neon Blue"></button>
+          <button type="button" class="swatch theme-purple" data-theme="purple" title="Purple"></button>
+          <button type="button" class="swatch theme-cyan" data-theme="cyan" title="Cyan"></button>
+        </div>
+        <input type="hidden" id="ae-theme" value="navy">
+      </div>
+      <div class="field">
+        <label>Card background</label>
+        <select id="ae-bg">
+          <option value="mesh">Animated mesh gradient</option>
+          <option value="blur">Blur circles</option>
+          <option value="lights">Moving lights</option>
+        </select>
+      </div>
+
+      <div class="msg" id="ae-msg"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="ae-cancel">Cancel</button>
+        <button type="submit" class="btn-primary">Add employee</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------- Task history modal ---------- -->
+<div id="history-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2 id="history-title">Task history</h2>
+    <div id="history-list" style="max-height:320px;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="history-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Reassign task modal ---------- -->
+<div id="reassign-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Send this task to someone else</h2>
+    <form id="reassign-form">
+      <div class="field">
+        <label>Reassign to</label>
+        <select id="reassign-employee" required></select>
+      </div>
+      <div class="msg" id="reassign-msg"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="reassign-cancel">Cancel</button>
+        <button type="submit" class="btn-primary">Confirm reassign</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------- Change password modal ---------- -->
+<div id="change-pw-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Change password</h2>
+    <form id="change-pw-form">
+      <div class="field">
+        <label>New password (min 6 characters)</label>
+        <input type="password" id="new-password" required minlength="6">
+      </div>
+      <div class="msg" id="pw-msg"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="pw-cancel">Cancel</button>
+        <button type="submit" class="btn-primary">Update password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------- Employee profile drawer ---------- -->
+<div id="profile-drawer-backdrop" class="drawer-backdrop hidden">
+  <div class="drawer" id="profile-drawer">
+    <button class="drawer-close" id="drawer-close" type="button">&times;</button>
+
+    <div class="drawer-avatar" id="drawer-avatar">--</div>
+    <h2 id="drawer-name">—</h2>
+    <div class="drawer-sub" id="drawer-designation">—</div>
+    <div class="drawer-id-row">
+      <span class="drawer-id" id="drawer-id">EMP-0000</span>
+      <span class="status-pill" id="drawer-status"><span class="status-dot"></span>Active</span>
+    </div>
+
+    <div class="drawer-stats">
+      <div class="stat-box">
+        <div class="stat-value" id="drawer-completed">0</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="drawer-pending">0</div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="drawer-productivity">0%</div>
+        <div class="stat-label">Productivity</div>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <label>Department</label>
+      <div class="drawer-value" id="drawer-department">—</div>
+    </div>
+    <div class="drawer-section">
+      <label>Email</label>
+      <div class="drawer-value" id="drawer-email">—</div>
+    </div>
+    <div class="drawer-section">
+      <label>Mobile</label>
+      <div class="drawer-value" id="drawer-mobile">—</div>
+    </div>
+
+    <div class="drawer-section">
+      <label>Attendance <span class="hint">tracked in your external system — update manually</span></label>
+      <div class="attendance-row">
+        <input type="number" id="drawer-attendance-input" min="0" max="100" placeholder="e.g. 92">
+        <span>%</span>
+        <button class="btn-secondary" id="drawer-attendance-save" type="button">Save</button>
+      </div>
+      <div class="msg" id="drawer-attendance-msg"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
