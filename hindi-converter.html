@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hindi Font Converter — Kruti Dev ⇄ Unicode</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* Standalone page shell — reuses the same dark "app-theme" look as the dashboard,
+     without needing the login flow or any of the app.js dashboard logic. */
+  body{
+    background:#101B2C;
+    min-height:100vh;
+  }
+  .standalone-wrap{
+    max-width:1080px;
+    margin:0 auto;
+    padding:32px 24px 60px;
+  }
+  .standalone-topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:26px;
+  }
+  .standalone-topbar .brand{color:var(--amber);margin-bottom:4px;}
+  .standalone-topbar h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:20px;
+    color:#fff;
+    margin:0;
+  }
+  .back-link{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:#8FA3BC;
+    text-decoration:none;
+    border:1px solid rgba(255,255,255,.16);
+    padding:8px 14px;
+    border-radius:8px;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .back-link:hover{border-color:#7C3AED;color:#fff;}
+</style>
+</head>
+<body class="app-theme">
+
+<div class="standalone-wrap">
+  <div class="standalone-topbar">
+    <div>
+      <div class="brand">WORK ORDER</div>
+      <h1>Hindi Font Converter</h1>
+    </div>
+    <a href="index.html" class="back-link">← Back to dashboard</a>
+  </div>
+
+  <div class="panel panel-tool">
+    <h2>Hindi Font Converter <span class="tag">कृतिदेव ⇄ यूनिकोड</span></h2>
+    <p class="tool-sub">Paste Kruti Dev text on the left to get Unicode (Mangal), or paste Unicode on the right to get Kruti Dev.</p>
+
+    <div id="loadDiv1" style="display:none;"></div>
+    <div id="loadDiv2" style="display:none;"></div>
+
+    <div class="converter-grid">
+      <div class="converter-col">
+        <div class="converter-col-head">
+          <span class="cc-label">कृतिदेव (Kruti Dev)</span>
+          <span class="cc-actions">
+            <button type="button" class="btn-secondary-small" onclick="copy_data_legacy()">Copy</button>
+            <button type="button" class="btn-secondary-small" onclick="clear_data_legacy()">Clear</button>
+          </span>
+        </div>
+        <textarea name="TextToConvert" id="legacy_text" rows="12" class="kd-font" placeholder="यहाँ कृतिदेव टेक्स्ट पेस्ट करें..."></textarea>
+        <button type="button" class="btn-primary btn-gradient" style="width:100%;margin-top:10px;" onclick="convert_to_unicode();">Convert to Unicode →</button>
+      </div>
+
+      <div class="converter-col">
+        <div class="converter-col-head">
+          <span class="cc-label">यूनिकोड (Unicode)</span>
+          <span class="cc-actions">
+            <button type="button" class="btn-secondary-small" onclick="copy_data_unicode()">Copy</button>
+            <button type="button" class="btn-secondary-small" onclick="clear_data_unicode()">Clear</button>
+          </span>
+        </div>
+        <textarea name="ConvertedText" id="unicode_text" rows="12" placeholder="यूनिकोड टेक्स्ट यहाँ पेस्ट करें..."></textarea>
+        <button type="button" class="btn-primary btn-gradient" style="width:100%;margin-top:10px;" onclick="Convert_to_Krutidev_010();">← Convert to Kruti Dev</button>
+      </div>
+    </div>
+
+    <p class="tool-note">Tip: the Kruti Dev box may show scrambled-looking symbols unless you have the Kruti Dev 010 font installed on this device — that's normal for this legacy font, and the conversion still works correctly either way. English words and numbers inside your Hindi text (like "OMR" or "01/2025") are kept exactly as typed.</p>
+  </div>
+</div>
+
+<script src="hindi-converter.js"></script>
+<script>
+  // Ripple effect on the tool's own buttons — same interaction as the rest of the site.
+  const RIPPLE_SELECTOR = '.btn-primary, .btn-secondary, .btn-secondary-small';
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest(RIPPLE_SELECTOR);
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 2;
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple-effect';
+    ripple.style.width = ripple.style.height = `${size}px`;
+    ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+    ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+    btn.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove());
+  });
+</script>
+</body>
+</html>
