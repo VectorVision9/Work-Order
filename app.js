@@ -798,7 +798,8 @@ function renderMyIdCard() {
 // WORK INBOX (employee dashboard) — replaces the old flat "Team clipboard"
 // =========================================================
 let inboxScope = 'mine';   // 'mine' | 'everyone'
-let inboxTab = 'new';      // 'new' | 'in_progress' | 'completed' | 'archived'
+let inboxTab = 'all';      // 'all' | 'new' | 'in_progress' | 'completed' | 'archived'
+let selectedTicketId = null;
 
 function taskBucket(t) {
   if (t.status === 'complete') {
@@ -852,7 +853,7 @@ async function renderWorkInbox() {
     ? allTasksCache.filter(t => t.assigned_to === currentUser.id)
     : allTasksCache;
 
-  const buckets = { new: [], in_progress: [], completed: [], archived: [] };
+  const buckets = { all: scoped, new: [], in_progress: [], completed: [], archived: [] };
   scoped.forEach(t => buckets[taskBucket(t)].push(t));
 
   Object.keys(buckets).forEach(key => {
@@ -883,66 +884,135 @@ document.querySelectorAll('.inbox-tab').forEach(btn => {
 });
 
 function renderMyTickets(tasks) {
-  const grid = $('my-tickets');
-  grid.innerHTML = '';
+  const list = $('my-tickets');
+  list.innerHTML = '';
 
   if (tasks.length === 0) {
-    grid.innerHTML = '<p style="color:#5B6472;font-style:italic;">Nothing here right now.</p>';
+    list.innerHTML = '<p class="inbox-list-empty">Nothing here right now.</p>';
+    renderInboxDetail(null);
     return;
+  }
+
+  // keep the current selection if it's still visible in this list, otherwise fall back to the first row
+  if (!tasks.some(t => t.id === selectedTicketId)) {
+    selectedTicketId = tasks[0].id;
   }
 
   tasks.forEach(t => {
     const meta = statusMeta(t);
-    const isMine = t.assigned_to === currentUser.id;
-    const assigneeName = isMine ? currentProfile.full_name : (t.employee?.full_name || 'someone else');
-
-    let actionsHtml = '';
-    if (isMine) {
-      if (t.status === 'assigned') {
-        actionsHtml = `
-          <div class="actions">
-            <button class="btn-primary" data-accept="${t.id}">✅ Accept</button>
-            <button class="btn-secondary-small" data-reassign="${t.id}">Not related to me</button>
-          </div>`;
-      } else if (t.status === 'accepted') {
-        actionsHtml = `
-          <div class="actions">
-            <button class="btn-primary" data-start="${t.id}">▶️ Start work</button>
-          </div>`;
-      } else if (t.status === 'in_progress') {
-        actionsHtml = `
-          <div class="actions">
-            <button class="btn-primary" data-complete="${t.id}">✔️ Mark complete</button>
-          </div>`;
-      }
-    }
-
-    const card = document.createElement('div');
-    card.className = 'ticket status-' + meta.cls + (isMine ? '' : ' readonly');
     const dl = daysLeftInfo(t);
     const counts = ticketCommentCounts[t.id] || { comments: 0, files: 0 };
-    card.innerHTML = `
-      <div class="stamp ${meta.cls}">${meta.icon} ${meta.label}</div>
-      <span class="wo-number">${getWoNumber(t)}</span>
-      <div class="assignee"><span class="chip">${getInitials(assigneeName)}</span>${isMine ? 'Assigned to you' : 'Assigned to ' + escapeHtml(t.employee?.full_name || 'someone else')}</div>
-      <h3>${escapeHtml(t.title)}</h3>
-      ${t.description ? `<p class="desc">${escapeHtml(t.description)}</p>` : ''}
-      <div class="meta ${isOverdue(t) ? 'overdue' : ''}">Deadline: ${formatDate(t.deadline)}${dl ? ` &nbsp;·&nbsp; <span class="days-left ${dl.overdue ? 'overdue' : ''}">⏱ ${dl.text}</span>` : ''}</div>
-      ${t.status === 'complete' ? `<div class="meta">Completed ${formatDate(t.completed_at)}</div>` : ''}
-      <div class="ticket-counts">
-        <span>📎 ${counts.files} File${counts.files === 1 ? '' : 's'}</span>
+
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'inbox-row status-' + meta.cls + (t.id === selectedTicketId ? ' selected' : '');
+    row.dataset.id = t.id;
+    row.innerHTML = `
+      <div class="ir-top">
+        <span class="ir-wo">${getWoNumber(t)}</span>
+        <span class="ir-stamp ${meta.cls}">${meta.icon} ${meta.label}</span>
+      </div>
+      <div class="ir-title">${escapeHtml(t.title)}</div>
+      <div class="ir-meta">
+        <span>${formatDate(t.deadline)}</span>
+        ${dl ? `<span class="ir-days ${dl.overdue ? 'overdue' : ''}">⏱ ${dl.text}</span>` : ''}
+      </div>
+      <div class="ir-counts">
+        <span>📎 ${counts.files} Attachment${counts.files === 1 ? '' : 's'}</span>
         <span>💬 ${counts.comments} Comment${counts.comments === 1 ? '' : 's'}</span>
       </div>
-      <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-text-small" data-history="${t.id}" data-title="${escapeHtml(t.title)}">View history</button>
-        <button class="btn-text-small" data-comments="${t.id}" data-title="${escapeHtml(t.title)}">💬 Comments</button>
-      </div>
-      ${actionsHtml}
     `;
-    grid.appendChild(card);
+    row.addEventListener('click', () => {
+      selectedTicketId = t.id;
+      list.querySelectorAll('.inbox-row').forEach(r => r.classList.toggle('selected', r.dataset.id === t.id));
+      renderInboxDetail(t);
+    });
+    list.appendChild(row);
   });
 
-  grid.querySelectorAll('button[data-accept]').forEach(btn => {
+  const selectedTask = tasks.find(t => t.id === selectedTicketId) || tasks[0];
+  renderInboxDetail(selectedTask);
+}
+
+function renderInboxDetail(t) {
+  const panel = $('inbox-detail');
+  if (!panel) return;
+
+  if (!t) {
+    panel.innerHTML = `
+      <div class="inbox-detail-empty" id="inbox-detail-empty">
+        <div class="ide-icon">🗂️</div>
+        <p>Select a work order from the list to view its details.</p>
+      </div>`;
+    return;
+  }
+
+  const meta = statusMeta(t);
+  const isMine = t.assigned_to === currentUser.id;
+  const assigneeName = isMine ? currentProfile.full_name : (t.employee?.full_name || 'someone else');
+  const dl = daysLeftInfo(t);
+  const counts = ticketCommentCounts[t.id] || { comments: 0, files: 0 };
+
+  let actionsHtml = '';
+  if (isMine) {
+    if (t.status === 'assigned') {
+      actionsHtml = `
+        <div class="id-hint">ℹ️ Accept the task if you can complete it on time.</div>
+        <div class="id-actions">
+          <button class="btn-primary" data-accept="${t.id}">✅ Accept</button>
+          <button class="btn-secondary" data-reassign="${t.id}">✕ Not related to me</button>
+        </div>`;
+    } else if (t.status === 'accepted') {
+      actionsHtml = `<div class="id-actions"><button class="btn-primary" data-start="${t.id}">▶️ Start work</button></div>`;
+    } else if (t.status === 'in_progress') {
+      actionsHtml = `<div class="id-actions"><button class="btn-primary" data-complete="${t.id}">✔️ Mark complete</button></div>`;
+    }
+  }
+
+  panel.innerHTML = `
+    <div class="id-header">
+      <div class="id-header-left">
+        <span class="ir-wo">${getWoNumber(t)}</span>
+        <span class="ir-stamp ${meta.cls}">${meta.icon} ${meta.label}</span>
+      </div>
+      <div class="id-header-actions">
+        <button type="button" class="btn-secondary-small" data-history="${t.id}" data-title="${escapeHtml(t.title)}">🕘 View History</button>
+        <button type="button" class="btn-secondary-small" data-comments="${t.id}" data-title="${escapeHtml(t.title)}">💬 Comments (${counts.comments})</button>
+      </div>
+    </div>
+
+    <h2 class="id-title">${escapeHtml(t.title)}</h2>
+
+    <div class="id-meta-row">
+      <span>📅 ${formatDate(t.deadline)}</span>
+      ${dl ? `<span class="${dl.overdue ? 'overdue' : ''}">⏱ ${dl.text}</span>` : ''}
+      ${t.status === 'complete' ? `<span>✅ Completed ${formatDate(t.completed_at)}</span>` : ''}
+    </div>
+
+    <div class="id-info-grid">
+      <div>
+        <div class="id-info-label">Assigned By</div>
+        <div class="id-info-value"><span class="id-avatar">B</span> Boss</div>
+      </div>
+      <div>
+        <div class="id-info-label">Assigned To</div>
+        <div class="id-info-value"><span class="id-avatar">${getInitials(assigneeName)}</span> ${isMine ? 'You' : escapeHtml(assigneeName)}</div>
+      </div>
+      <div>
+        <div class="id-info-label">Description</div>
+        <div class="id-info-value">${t.description ? escapeHtml(t.description) : '—'}</div>
+      </div>
+    </div>
+
+    <div class="id-stats-row">
+      <div class="id-stat"><span class="id-stat-label">Attachments</span><span class="id-stat-value">📎 ${counts.files} File${counts.files === 1 ? '' : 's'}</span></div>
+      <div class="id-stat"><span class="id-stat-label">Comments</span><span class="id-stat-value">💬 ${counts.comments} Comment${counts.comments === 1 ? '' : 's'}</span></div>
+    </div>
+
+    ${actionsHtml}
+  `;
+
+  panel.querySelectorAll('button[data-accept]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = 'Accepting...';
@@ -952,13 +1022,13 @@ function renderMyTickets(tasks) {
         .eq('id', taskId).eq('assigned_to', currentUser.id);
       if (error) { alert('Could not update task: ' + error.message); btn.disabled = false; btn.textContent = '✅ Accept'; return; }
       await sb.from('task_events').insert({ task_id: taskId, event_type: 'accepted', actor: currentUser.id });
-      const t = allTasksCache.find(x => x.id === taskId);
-      if (t) await notifyBoss('task_accepted', 'Task accepted', `${currentProfile.full_name} accepted the task: "${t.title}"`, taskId);
+      const task = allTasksCache.find(x => x.id === taskId);
+      if (task) await notifyBoss('task_accepted', 'Task accepted', `${currentProfile.full_name} accepted the task: "${task.title}"`, taskId);
       await loadEmployeeData();
     });
   });
 
-  grid.querySelectorAll('button[data-start]').forEach(btn => {
+  panel.querySelectorAll('button[data-start]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = 'Starting...';
@@ -968,13 +1038,13 @@ function renderMyTickets(tasks) {
         .eq('id', taskId).eq('assigned_to', currentUser.id);
       if (error) { alert('Could not update task: ' + error.message); btn.disabled = false; btn.textContent = '▶️ Start work'; return; }
       await sb.from('task_events').insert({ task_id: taskId, event_type: 'started', actor: currentUser.id });
-      const t = allTasksCache.find(x => x.id === taskId);
-      if (t) await notifyBoss('task_started', 'Work started', `${currentProfile.full_name} started work on: "${t.title}"`, taskId);
+      const task = allTasksCache.find(x => x.id === taskId);
+      if (task) await notifyBoss('task_started', 'Work started', `${currentProfile.full_name} started work on: "${task.title}"`, taskId);
       await loadEmployeeData();
     });
   });
 
-  grid.querySelectorAll('button[data-complete]').forEach(btn => {
+  panel.querySelectorAll('button[data-complete]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = 'Saving...';
@@ -991,21 +1061,21 @@ function renderMyTickets(tasks) {
         return;
       }
       await sb.from('task_events').insert({ task_id: taskId, event_type: 'completed', actor: currentUser.id });
-      const t = allTasksCache.find(x => x.id === taskId);
-      if (t) await notifyBoss('task_completed', 'Task completed', `${currentProfile.full_name} completed: "${t.title}"`, taskId);
+      const task = allTasksCache.find(x => x.id === taskId);
+      if (task) await notifyBoss('task_completed', 'Task completed', `${currentProfile.full_name} completed: "${task.title}"`, taskId);
       await loadEmployeeData();
     });
   });
 
-  grid.querySelectorAll('button[data-reassign]').forEach(btn => {
+  panel.querySelectorAll('button[data-reassign]').forEach(btn => {
     btn.addEventListener('click', () => openReassignModal(btn.dataset.reassign));
   });
 
-  grid.querySelectorAll('button[data-history]').forEach(btn => {
+  panel.querySelectorAll('button[data-history]').forEach(btn => {
     btn.addEventListener('click', () => openHistoryModal(btn.dataset.history, btn.dataset.title));
   });
 
-  grid.querySelectorAll('button[data-comments]').forEach(btn => {
+  panel.querySelectorAll('button[data-comments]').forEach(btn => {
     btn.addEventListener('click', () => openCommentsModal(btn.dataset.comments, btn.dataset.title));
   });
 }
