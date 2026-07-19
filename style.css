@@ -2066,13 +2066,17 @@ body.app-theme .notif-push-toggle.enabled{color:#5BE8A6;}
   display:flex;
   flex-direction:column;
   padding:20px 16px;
-  position:sticky;
+  position:fixed;
+  left:0;
   top:0;
   height:100vh;
   overflow-y:auto;
   z-index:40;
+  transform:translateX(-100%);
+  box-shadow:0 0 40px rgba(0,0,0,.5);
   transition:transform .25s ease;
 }
+.sidebar.open{transform:translateX(0);}
 .sidebar-brand{
   display:flex;
   align-items:center;
@@ -2082,12 +2086,12 @@ body.app-theme .notif-push-toggle.enabled{color:#5BE8A6;}
 .sidebar-brand .brand-mark-icon{
   display:inline-flex;align-items:center;justify-content:center;
   width:30px;height:30px;border-radius:8px;
-  background:linear-gradient(135deg, var(--amber), #6FE0FF);
-  color:#0A1526;
+  background:linear-gradient(135deg,#6D5DF6,#4338CA);
+  color:#fff;
   font-size:15px;
-  box-shadow:0 0 14px rgba(201,127,10,.4);
+  box-shadow:0 0 14px rgba(109,93,246,.5);
 }
-.sidebar-brand .brand{color:var(--amber);font-size:15px;letter-spacing:.06em;}
+.sidebar-brand .brand{color:#C9C3FF;font-size:15px;letter-spacing:.06em;}
 
 .sidebar-nav{display:flex;flex-direction:column;gap:4px;flex:1;}
 .sidebar-nav-btn{
@@ -2171,18 +2175,28 @@ body.app-theme .notif-push-toggle.enabled{color:#5BE8A6;}
 .sidebar-backdrop{
   display:none;
   position:fixed;inset:0;
-  background:rgba(0,0,0,.5);
+  background:rgba(6,8,14,.6);
+  backdrop-filter:blur(2px);
   z-index:35;
 }
+.sidebar-backdrop.open{display:block;}
 
 .sidebar-toggle-btn{
-  display:none;
-  background:transparent;
-  border:1px solid var(--paper-line);
-  color:var(--ink);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  color:var(--paper);
   font-size:16px;
-  padding:6px 10px;
+  width:34px;
+  height:34px;
+  padding:0;
   border-radius:8px;
+}
+.sidebar-toggle-btn:hover{
+  background:rgba(124,58,237,.18);
+  border-color:#7C3AED;
 }
 
 /* ---- main column / topbar ---- */
@@ -2261,16 +2275,8 @@ body.app-theme .search-result-type{background:rgba(255,255,255,.08);color:#93A4B
 .hero-banner-row.app-page{display:none;}
 .hero-banner-row.app-page.active{display:grid;}
 
-/* ---- responsive: collapse sidebar on small screens ---- */
+/* ---- responsive: hide the search bar on small screens (sidebar is an overlay at every width now) ---- */
 @media (max-width:900px){
-  .sidebar{
-    position:fixed;
-    left:0;top:0;
-    transform:translateX(-100%);
-  }
-  .sidebar.open{transform:translateX(0);}
-  .sidebar-backdrop.open{display:block;}
-  .sidebar-toggle-btn{display:inline-block;}
   .topbar-search{display:none;}
 }
 
