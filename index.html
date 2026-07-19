@@ -411,13 +411,22 @@
           </div>
 
           <div class="inbox-tabs" id="inbox-tabs">
-            <button type="button" class="inbox-tab active" data-tab="new">🔴 New <span class="inbox-tab-count" id="tab-count-new">0</span></button>
+            <button type="button" class="inbox-tab active" data-tab="all">All <span class="inbox-tab-count" id="tab-count-all">0</span></button>
+            <button type="button" class="inbox-tab" data-tab="new">🔴 New <span class="inbox-tab-count" id="tab-count-new">0</span></button>
             <button type="button" class="inbox-tab" data-tab="in_progress">🟡 In Progress <span class="inbox-tab-count" id="tab-count-in_progress">0</span></button>
             <button type="button" class="inbox-tab" data-tab="completed">🟢 Completed <span class="inbox-tab-count" id="tab-count-completed">0</span></button>
             <button type="button" class="inbox-tab" data-tab="archived">⚫ Archived <span class="inbox-tab-count" id="tab-count-archived">0</span></button>
           </div>
 
-          <div class="ticket-grid" id="my-tickets"></div>
+          <div class="inbox-split">
+            <div class="inbox-list" id="my-tickets"></div>
+            <div class="inbox-detail" id="inbox-detail">
+              <div class="inbox-detail-empty" id="inbox-detail-empty">
+                <div class="ide-icon">🗂️</div>
+                <p>Select a work order from the list to view its details.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
