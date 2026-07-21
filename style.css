@@ -293,7 +293,7 @@ tbody tr:last-child td{border-bottom:none;}
 .badge.in-progress{background:var(--amber-bg);color:var(--amber);}
 
 /* ---------- Task tickets (employee view) ---------- */
-.ticket-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;}
+.ticket-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
 .ticket{
   position:relative;
   background:var(--paper);
@@ -1697,11 +1697,16 @@ body.app-theme #app-view .team-status-badge.online{color:#5BE8A6;}
   display:grid;
   grid-template-columns:1fr 320px;
   gap:24px;
-  align-items:start;
+  align-items:stretch;
   margin-bottom:24px;
 }
 .emp-top-main .panel, .emp-top-main .id-card-grid{margin-bottom:0;}
 .emp-top-main{display:flex;flex-direction:column;gap:24px;}
+.emp-top-side{display:flex;flex-direction:column;}
+.emp-top-side .panel{margin-bottom:0;}
+.holiday-panel{display:flex;flex-direction:column;height:100%;}
+.holiday-panel .holiday-list{flex:1;}
+.holiday-view-all-btn{width:100%;margin-top:12px;}
 .emp-top-side .panel{margin-bottom:0;}
 
 @media (max-width:900px){
@@ -2477,4 +2482,92 @@ body.app-theme #app-view .tu-label{color:#93A4BC;}
 }
 @media (max-width:480px){
   .tu-row{grid-template-columns:repeat(2,1fr);}
+}
+
+/* =========================================================
+   Dedicated Work Inbox sidebar page — split list + detail view
+   ========================================================= */
+.inbox-split{
+  display:grid;
+  grid-template-columns:1fr 420px;
+  gap:20px;
+  align-items:start;
+}
+.inbox-split-list{
+  background:#fff;
+  border:1px solid var(--paper-line);
+  border-radius:var(--radius);
+  padding:22px;
+}
+.inbox-split-list .ticket-grid-side{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+  max-height:70vh;
+  overflow-y:auto;
+  padding-right:4px;
+}
+.ticket.ticket-clickable{cursor:pointer;}
+.ticket.ticket-clickable:hover{box-shadow:0 10px 26px rgba(27,30,35,.12);transform:translateY(-2px);}
+
+.inbox-split-detail{
+  background:#fff;
+  border:1px solid var(--paper-line);
+  border-radius:var(--radius);
+  padding:22px;
+  position:sticky;
+  top:0;
+  max-height:calc(100vh - 140px);
+  overflow-y:auto;
+}
+.idc-empty{color:var(--slate);font-style:italic;text-align:center;padding:60px 20px;}
+.idc-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.idc-header .wo-number{margin-right:8px;}
+.idc-content h2{font-family:'Space Grotesk',sans-serif;font-size:20px;margin:0 0 8px 0;}
+.idc-meta-row{display:flex;gap:14px;font-size:13px;color:var(--slate);margin-bottom:16px;}
+.idc-meta-row .days-left{color:var(--slate);}
+
+.idc-info-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  padding:14px 0;
+  border-top:1px solid var(--paper-line);
+  border-bottom:1px solid var(--paper-line);
+  margin-bottom:14px;
+}
+.idc-info-grid > div:last-child{grid-column:1 / -1;}
+.idc-info-grid label{
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:var(--slate);
+  display:block;
+  margin-bottom:4px;
+}
+.idc-info-value{font-size:13.5px;color:var(--ink);}
+
+.idc-counts-row{display:flex;gap:16px;font-size:12.5px;color:var(--slate);margin-bottom:14px;}
+.idc-actions{display:flex;gap:10px;margin-bottom:20px;}
+.idc-actions button{flex:1;}
+
+.idc-split-bottom{display:flex;flex-direction:column;gap:20px;}
+.idc-split-bottom h3{font-family:'Space Grotesk',sans-serif;font-size:14px;margin:0 0 10px 0;}
+.idc-comments-list{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.idc-comment-input-row{display:flex;gap:8px;align-items:flex-end;}
+.idc-comment-input-row textarea{flex:1;resize:vertical;min-height:44px;}
+.idc-comment-actions{display:flex;gap:8px;}
+.idc-attach-btn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:9px 11px;}
+.idc-history-list{max-height:300px;overflow-y:auto;}
+
+body.app-theme #app-view .inbox-split-list,
+body.app-theme #app-view .inbox-split-detail{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);}
+body.app-theme #app-view .idc-content h2{color:#fff;}
+body.app-theme #app-view .idc-info-value{color:#fff;}
+body.app-theme #app-view .idc-info-grid{border-color:rgba(255,255,255,.1);}
+body.app-theme #app-view .idc-split-bottom h3{color:#fff;}
+
+@media (max-width:1100px){
+  .inbox-split{grid-template-columns:1fr;}
+  .inbox-split-detail{position:static;max-height:none;}
 }
