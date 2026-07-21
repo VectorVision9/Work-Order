@@ -414,7 +414,7 @@
               <h2>🎉 Holidays <span class="tag" id="holiday-year-tag">2026</span></h2>
               <div class="holiday-next" id="holiday-next">Loading...</div>
               <div class="holiday-list" id="holiday-list"></div>
-              <p class="tool-note" style="margin-top:10px;">Includes public &amp; restricted holidays, every Sunday, and every 2nd Saturday.</p>
+              <button type="button" class="btn-secondary holiday-view-all-btn" id="holiday-view-all-btn">View Full Calendar →</button>
             </div>
           </div>
         </div>
@@ -447,6 +447,83 @@
             <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📅</span>Calendar</button>
             <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📊</span>Reports</button>
             <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📁</span>Projects</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-page" data-page-group="inbox">
+        <div class="inbox-split">
+          <div class="inbox-split-list">
+            <div class="inbox-header">
+              <h2>📥 Work Inbox <span class="tag" id="my-task-count-side">0</span></h2>
+              <div class="inbox-scope-toggle">
+                <button type="button" class="inbox-scope-btn active" data-scope-side="mine">Mine</button>
+                <button type="button" class="inbox-scope-btn" data-scope-side="everyone">Everyone's</button>
+              </div>
+            </div>
+            <div class="inbox-tabs" id="inbox-tabs-side">
+              <button type="button" class="inbox-tab active" data-tab-side="new">🔴 New <span class="inbox-tab-count" id="tab-count-new-side">0</span></button>
+              <button type="button" class="inbox-tab" data-tab-side="in_progress">🟡 In Progress <span class="inbox-tab-count" id="tab-count-in_progress-side">0</span></button>
+              <button type="button" class="inbox-tab" data-tab-side="completed">🟢 Completed <span class="inbox-tab-count" id="tab-count-completed-side">0</span></button>
+              <button type="button" class="inbox-tab" data-tab-side="archived">⚫ Archived <span class="inbox-tab-count" id="tab-count-archived-side">0</span></button>
+            </div>
+            <div class="ticket-grid ticket-grid-side" id="my-tickets-side"></div>
+          </div>
+
+          <div class="inbox-split-detail" id="inbox-detail-panel">
+            <div class="idc-empty" id="idc-empty">Select a task on the left to view its details.</div>
+
+            <div class="idc-content hidden" id="idc-content">
+              <div class="idc-header">
+                <div>
+                  <span class="wo-number" id="idc-wo"></span>
+                  <span class="stamp" id="idc-status-badge"></span>
+                </div>
+                <div class="idc-header-actions">
+                  <button type="button" class="btn-secondary" id="idc-history-btn">🕒 View History</button>
+                </div>
+              </div>
+              <h2 id="idc-title"></h2>
+              <div class="idc-meta-row">
+                <span id="idc-date"></span>
+                <span id="idc-days-left"></span>
+              </div>
+
+              <div class="idc-info-grid">
+                <div><label>Assigned By</label><div class="idc-info-value" id="idc-assigned-by"></div></div>
+                <div><label>Assigned To</label><div class="idc-info-value" id="idc-assigned-to"></div></div>
+                <div><label>Description</label><div class="idc-info-value" id="idc-description"></div></div>
+              </div>
+
+              <div class="idc-counts-row">
+                <span id="idc-files-count">📎 0 Files</span>
+                <span id="idc-comments-count">💬 0 Comments</span>
+              </div>
+
+              <div class="idc-actions" id="idc-actions"></div>
+
+              <div class="idc-split-bottom">
+                <div class="idc-comments-col">
+                  <h3>Comments</h3>
+                  <div class="idc-comments-list" id="idc-comments-list"></div>
+                  <div class="idc-comment-input-row">
+                    <textarea id="idc-comment-message" rows="2" placeholder="Write a comment..."></textarea>
+                    <div class="idc-comment-actions">
+                      <label class="btn-secondary-small idc-attach-btn" title="Attach image or PDF">
+                        📎
+                        <input type="file" id="idc-comment-file" accept="image/*,application/pdf" class="hidden">
+                      </label>
+                      <button type="button" class="btn-primary btn-gradient" id="idc-comment-send">Send</button>
+                    </div>
+                  </div>
+                  <div class="msg" id="idc-comment-msg"></div>
+                </div>
+                <div class="idc-history-col">
+                  <h3>History</h3>
+                  <div class="idc-history-list" id="idc-history-list"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
