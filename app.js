@@ -67,6 +67,11 @@ function toggleTheme() {
 }
 $('theme-toggle-btn').addEventListener('click', toggleTheme);
 
+$('holiday-view-all-btn').addEventListener('click', () => {
+  holidayListExpanded = !holidayListExpanded;
+  renderHolidayWidget();
+});
+
 // ---- fullscreen toggle ----
 $('fullscreen-btn').addEventListener('click', () => {
   if (!document.fullscreenElement) {
@@ -856,48 +861,89 @@ async function fetchTicketCommentCounts(taskIds) {
   });
 }
 
-async function renderWorkInbox() {
-  const grid = $('my-tickets');
-  if (!grid) return;
+let inboxScopeSide = 'mine';
+let inboxTabSide = 'new';
 
+async function renderWorkInbox() {
   woNumberMap = null; // recompute fresh each time, in case tasks changed
 
-  const scoped = inboxScope === 'mine'
-    ? allTasksCache.filter(t => t.assigned_to === currentUser.id)
-    : allTasksCache;
+  // ---- dashboard-embedded Work Inbox ----
+  const grid = $('my-tickets');
+  if (grid) {
+    const scoped = inboxScope === 'mine'
+      ? allTasksCache.filter(t => t.assigned_to === currentUser.id)
+      : allTasksCache;
 
-  const buckets = { new: [], in_progress: [], completed: [], archived: [] };
-  scoped.forEach(t => buckets[taskBucket(t)].push(t));
+    const buckets = { new: [], in_progress: [], completed: [], archived: [] };
+    scoped.forEach(t => buckets[taskBucket(t)].push(t));
 
-  Object.keys(buckets).forEach(key => {
-    const el = $('tab-count-' + key);
-    if (el) el.textContent = buckets[key].length;
-  });
-  $('my-task-count').textContent = scoped.length;
-  updateSidebarInboxBadge();
+    Object.keys(buckets).forEach(key => {
+      const el = $('tab-count-' + key);
+      if (el) el.textContent = buckets[key].length;
+    });
+    $('my-task-count').textContent = scoped.length;
+    updateSidebarInboxBadge();
 
-  const visible = buckets[inboxTab] || [];
-  await fetchTicketCommentCounts(visible.map(t => t.id));
-  renderMyTickets(visible);
+    const visible = buckets[inboxTab] || [];
+    await fetchTicketCommentCounts(visible.map(t => t.id));
+    renderMyTickets(visible, 'my-tickets', false);
+  }
+
+  // ---- dedicated sidebar Work Inbox page (split list + detail) ----
+  const gridSide = $('my-tickets-side');
+  if (gridSide) {
+    const scopedSide = inboxScopeSide === 'mine'
+      ? allTasksCache.filter(t => t.assigned_to === currentUser.id)
+      : allTasksCache;
+
+    const bucketsSide = { new: [], in_progress: [], completed: [], archived: [] };
+    scopedSide.forEach(t => bucketsSide[taskBucket(t)].push(t));
+
+    Object.keys(bucketsSide).forEach(key => {
+      const el = $('tab-count-' + key + '-side');
+      if (el) el.textContent = bucketsSide[key].length;
+    });
+    $('my-task-count-side').textContent = scopedSide.length;
+
+    const visibleSide = bucketsSide[inboxTabSide] || [];
+    await fetchTicketCommentCounts(visibleSide.map(t => t.id));
+    renderMyTickets(visibleSide, 'my-tickets-side', true);
+  }
 }
 
-document.querySelectorAll('.inbox-scope-btn').forEach(btn => {
+document.querySelectorAll('.inbox-scope-btn[data-scope-side]').forEach(btn => {
   btn.addEventListener('click', () => {
-    inboxScope = btn.dataset.scope;
-    document.querySelectorAll('.inbox-scope-btn').forEach(b => b.classList.toggle('active', b === btn));
+    inboxScopeSide = btn.dataset.scopeSide;
+    document.querySelectorAll('[data-scope-side]').forEach(b => b.classList.toggle('active', b === btn));
     renderWorkInbox();
   });
 });
-document.querySelectorAll('.inbox-tab').forEach(btn => {
+document.querySelectorAll('.inbox-tab[data-tab-side]').forEach(btn => {
   btn.addEventListener('click', () => {
-    inboxTab = btn.dataset.tab;
-    document.querySelectorAll('.inbox-tab').forEach(b => b.classList.toggle('active', b === btn));
+    inboxTabSide = btn.dataset.tabSide;
+    document.querySelectorAll('[data-tab-side]').forEach(b => b.classList.toggle('active', b === btn));
     renderWorkInbox();
   });
 });
 
-function renderMyTickets(tasks) {
-  const grid = $('my-tickets');
+document.querySelectorAll('.inbox-scope-btn[data-scope]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    inboxScope = btn.dataset.scope;
+    document.querySelectorAll('.inbox-scope-btn[data-scope]').forEach(b => b.classList.toggle('active', b === btn));
+    renderWorkInbox();
+  });
+});
+document.querySelectorAll('.inbox-tab[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    inboxTab = btn.dataset.tab;
+    document.querySelectorAll('.inbox-tab[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
+    renderWorkInbox();
+  });
+});
+
+function renderMyTickets(tasks, targetId = 'my-tickets', inline = false) {
+  const grid = $(targetId);
+  if (!grid) return;
   grid.innerHTML = '';
 
   if (tasks.length === 0) {
@@ -932,7 +978,8 @@ function renderMyTickets(tasks) {
     }
 
     const card = document.createElement('div');
-    card.className = 'ticket status-' + meta.cls + (isMine ? '' : ' readonly');
+    card.className = 'ticket status-' + meta.cls + (isMine ? '' : ' readonly') + (inline ? ' ticket-clickable' : '');
+    if (inline) card.dataset.taskId = t.id;
     const dl = daysLeftInfo(t);
     const counts = ticketCommentCounts[t.id] || { comments: 0, files: 0 };
     card.innerHTML = `
@@ -940,24 +987,35 @@ function renderMyTickets(tasks) {
       <span class="wo-number">${getWoNumber(t)}</span>
       <div class="assignee"><span class="chip ${getAvatarColorClass(assigneeName)}">${getInitials(assigneeName)}</span>${isMine ? 'Assigned to you' : 'Assigned to ' + escapeHtml(t.employee?.full_name || 'someone else')}</div>
       <h3>${escapeHtml(t.title)}</h3>
-      ${t.description ? `<p class="desc">${escapeHtml(t.description)}</p>` : ''}
+      ${t.description && !inline ? `<p class="desc">${escapeHtml(t.description)}</p>` : ''}
       <div class="meta ${isOverdue(t) ? 'overdue' : ''}">Deadline: ${formatDate(t.deadline)}${dl ? ` &nbsp;·&nbsp; <span class="days-left ${dl.overdue ? 'overdue' : ''}">⏱ ${dl.text}</span>` : ''}</div>
       ${t.status === 'complete' ? `<div class="meta">Completed ${formatDate(t.completed_at)}</div>` : ''}
       <div class="ticket-counts">
         <span>📎 ${counts.files} File${counts.files === 1 ? '' : 's'}</span>
         <span>💬 ${counts.comments} Comment${counts.comments === 1 ? '' : 's'}</span>
       </div>
+      ${inline ? '' : `
       <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-text-small" data-history="${t.id}" data-title="${escapeHtml(t.title)}">View history</button>
         <button class="btn-text-small" data-comments="${t.id}" data-title="${escapeHtml(t.title)}">💬 Comments</button>
-      </div>
+      </div>`}
       ${actionsHtml}
     `;
     grid.appendChild(card);
   });
 
+  if (inline) {
+    grid.querySelectorAll('.ticket-clickable').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return; // let action buttons handle their own clicks
+        openInlineTaskDetail(card.dataset.taskId);
+      });
+    });
+  }
+
   grid.querySelectorAll('button[data-accept]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       btn.disabled = true;
       btn.textContent = 'Accepting...';
       const taskId = btn.dataset.accept;
@@ -969,11 +1027,13 @@ function renderMyTickets(tasks) {
       const t = allTasksCache.find(x => x.id === taskId);
       if (t) await notifyBoss('task_accepted', 'Task accepted', `${currentProfile.full_name} accepted the task: "${t.title}"`, taskId);
       await loadEmployeeData();
+      if (inline) openInlineTaskDetail(taskId);
     });
   });
 
   grid.querySelectorAll('button[data-start]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       btn.disabled = true;
       btn.textContent = 'Starting...';
       const taskId = btn.dataset.start;
@@ -985,11 +1045,13 @@ function renderMyTickets(tasks) {
       const t = allTasksCache.find(x => x.id === taskId);
       if (t) await notifyBoss('task_started', 'Work started', `${currentProfile.full_name} started work on: "${t.title}"`, taskId);
       await loadEmployeeData();
+      if (inline) openInlineTaskDetail(taskId);
     });
   });
 
   grid.querySelectorAll('button[data-complete]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       btn.disabled = true;
       btn.textContent = 'Saving...';
       const taskId = btn.dataset.complete;
@@ -1008,23 +1070,179 @@ function renderMyTickets(tasks) {
       const t = allTasksCache.find(x => x.id === taskId);
       if (t) await notifyBoss('task_completed', 'Task completed', `${currentProfile.full_name} completed: "${t.title}"`, taskId);
       await loadEmployeeData();
+      if (inline) openInlineTaskDetail(taskId);
     });
   });
 
   grid.querySelectorAll('button[data-reassign]').forEach(btn => {
-    btn.addEventListener('click', () => openReassignModal(btn.dataset.reassign));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openReassignModal(btn.dataset.reassign); });
   });
 
   grid.querySelectorAll('button[data-history]').forEach(btn => {
-    btn.addEventListener('click', () => openHistoryModal(btn.dataset.history, btn.dataset.title));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openHistoryModal(btn.dataset.history, btn.dataset.title); });
   });
 
   grid.querySelectorAll('button[data-comments]').forEach(btn => {
-    btn.addEventListener('click', () => openCommentsModal(btn.dataset.comments, btn.dataset.title));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openCommentsModal(btn.dataset.comments, btn.dataset.title); });
   });
 }
 
-// ---------- "Not related to me" reassignment ----------
+// =========================================================
+// Inline task detail panel (dedicated sidebar Work Inbox page)
+// =========================================================
+let inlineDetailTaskId = null;
+
+async function openInlineTaskDetail(taskId) {
+  const t = allTasksCache.find(x => x.id === taskId);
+  if (!t) return;
+
+  inlineDetailTaskId = taskId;
+  $('idc-empty').classList.add('hidden');
+  $('idc-content').classList.remove('hidden');
+
+  const meta = statusMeta(t);
+  const isMine = t.assigned_to === currentUser.id;
+  const dl = daysLeftInfo(t);
+  const counts = ticketCommentCounts[t.id] || { comments: 0, files: 0 };
+
+  await getBossId(); // ensures cachedBossName is populated
+
+  $('idc-wo').textContent = getWoNumber(t);
+  $('idc-status-badge').innerHTML = `${meta.icon} ${meta.label}`;
+  $('idc-status-badge').className = 'stamp ' + meta.cls;
+  $('idc-title').textContent = t.title;
+  $('idc-date').textContent = `📅 ${formatDate(t.deadline)}`;
+  $('idc-days-left').textContent = dl ? `⏱ ${dl.text}` : '';
+  $('idc-assigned-by').textContent = cachedBossName || 'Boss';
+  $('idc-assigned-to').textContent = t.employee?.full_name || (isMine ? currentProfile.full_name : '—');
+  $('idc-description').textContent = t.description || '—';
+  $('idc-files-count').textContent = `📎 ${counts.files} File${counts.files === 1 ? '' : 's'}`;
+  $('idc-comments-count').textContent = `💬 ${counts.comments} Comment${counts.comments === 1 ? '' : 's'}`;
+
+  let actionsHtml = '';
+  if (isMine) {
+    if (t.status === 'assigned') {
+      actionsHtml = `
+        <button class="btn-primary" id="idc-accept-btn">✅ Accept</button>
+        <button class="btn-secondary-small" id="idc-reassign-btn">Not related to me</button>`;
+    } else if (t.status === 'accepted') {
+      actionsHtml = `<button class="btn-primary" id="idc-start-btn">▶️ Start work</button>`;
+    } else if (t.status === 'in_progress') {
+      actionsHtml = `<button class="btn-primary" id="idc-complete-btn">✔️ Mark complete</button>`;
+    }
+  }
+  $('idc-actions').innerHTML = actionsHtml;
+
+  const acceptBtn = $('idc-accept-btn');
+  if (acceptBtn) acceptBtn.addEventListener('click', async () => {
+    acceptBtn.disabled = true; acceptBtn.textContent = 'Accepting...';
+    const { error } = await sb.from('tasks').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', taskId).eq('assigned_to', currentUser.id);
+    if (error) { alert('Could not update task: ' + error.message); return; }
+    await sb.from('task_events').insert({ task_id: taskId, event_type: 'accepted', actor: currentUser.id });
+    await notifyBoss('task_accepted', 'Task accepted', `${currentProfile.full_name} accepted the task: "${t.title}"`, taskId);
+    await loadEmployeeData();
+    openInlineTaskDetail(taskId);
+  });
+  const startBtn = $('idc-start-btn');
+  if (startBtn) startBtn.addEventListener('click', async () => {
+    startBtn.disabled = true; startBtn.textContent = 'Starting...';
+    const { error } = await sb.from('tasks').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', taskId).eq('assigned_to', currentUser.id);
+    if (error) { alert('Could not update task: ' + error.message); return; }
+    await sb.from('task_events').insert({ task_id: taskId, event_type: 'started', actor: currentUser.id });
+    await notifyBoss('task_started', 'Work started', `${currentProfile.full_name} started work on: "${t.title}"`, taskId);
+    await loadEmployeeData();
+    openInlineTaskDetail(taskId);
+  });
+  const completeBtn = $('idc-complete-btn');
+  if (completeBtn) completeBtn.addEventListener('click', async () => {
+    completeBtn.disabled = true; completeBtn.textContent = 'Saving...';
+    const { error } = await sb.from('tasks').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', taskId).eq('assigned_to', currentUser.id);
+    if (error) { alert('Could not update task: ' + error.message); return; }
+    await sb.from('task_events').insert({ task_id: taskId, event_type: 'completed', actor: currentUser.id });
+    await notifyBoss('task_completed', 'Task completed', `${currentProfile.full_name} completed: "${t.title}"`, taskId);
+    await loadEmployeeData();
+    openInlineTaskDetail(taskId);
+  });
+  const reassignBtn = $('idc-reassign-btn');
+  if (reassignBtn) reassignBtn.addEventListener('click', () => openReassignModal(taskId));
+
+  $('idc-history-btn').onclick = () => openHistoryModal(taskId, t.title);
+
+  // comments + history auto-load, visible without an extra click
+  await loadComments(taskId, 'idc-comments-list');
+  await loadHistoryInto(taskId, 'idc-history-list');
+}
+
+$('idc-comment-file').addEventListener('change', () => {
+  const file = $('idc-comment-file').files[0];
+  if (file && !classifyFile(file)) {
+    $('idc-comment-msg').textContent = 'Only images or PDF files are supported.';
+    $('idc-comment-msg').className = 'msg err';
+    $('idc-comment-file').value = '';
+  }
+});
+
+$('idc-comment-send').addEventListener('click', async () => {
+  const msg = $('idc-comment-msg');
+  msg.textContent = '';
+  msg.className = 'msg';
+
+  const message = $('idc-comment-message').value.trim();
+  const file = $('idc-comment-file').files[0];
+  if (!message && !file) {
+    msg.textContent = 'Write something or attach a file first.';
+    msg.className = 'msg err';
+    return;
+  }
+  if (!inlineDetailTaskId) return;
+
+  const sendBtn = $('idc-comment-send');
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Sending...';
+
+  let attachment = null;
+  try {
+    if (file) attachment = await uploadFileToStorage(file, `task-comments/${inlineDetailTaskId}`);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'msg err';
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+    return;
+  }
+
+  const { error } = await sb.from('task_comments').insert({
+    task_id: inlineDetailTaskId,
+    author: currentUser.id,
+    message: message || null,
+    attachment_url: attachment?.url || null,
+    attachment_name: attachment?.name || null,
+    attachment_type: attachment?.type || null
+  });
+
+  sendBtn.disabled = false;
+  sendBtn.textContent = 'Send';
+
+  if (error) {
+    msg.textContent = error.message;
+    msg.className = 'msg err';
+    return;
+  }
+
+  $('idc-comment-message').value = '';
+  $('idc-comment-file').value = '';
+  await loadComments(inlineDetailTaskId, 'idc-comments-list');
+
+  const t = allTasksCache.find(x => x.id === inlineDetailTaskId);
+  if (t) {
+    const recipient = currentProfile.role === 'boss' ? t.assigned_to : await getBossId();
+    if (recipient && recipient !== currentUser.id) {
+      await createNotification(recipient, 'comment', `${currentProfile.full_name} commented`, t.title, t.id);
+    }
+  }
+});
+
+
 function openReassignModal(taskId) {
   const select = $('reassign-employee');
   select.innerHTML = '';
@@ -1110,9 +1328,14 @@ $('history-close').addEventListener('click', () => $('history-modal').classList.
 
 async function openHistoryModal(taskId, taskTitle) {
   $('history-title').textContent = `History — ${taskTitle}`;
-  const list = $('history-list');
-  list.innerHTML = '<p style="color:#5B6472;font-style:italic;">Loading...</p>';
   $('history-modal').classList.remove('hidden');
+  await loadHistoryInto(taskId, 'history-list');
+}
+
+async function loadHistoryInto(taskId, listId) {
+  const list = $(listId);
+  if (!list) return;
+  list.innerHTML = '<p style="color:#5B6472;font-style:italic;">Loading...</p>';
 
   const { data, error } = await sb
     .from('task_events')
@@ -1747,8 +1970,8 @@ async function openCommentsModal(taskId, taskTitle) {
   await loadComments(taskId);
 }
 
-async function loadComments(taskId) {
-  const list = $('comments-list');
+async function loadComments(taskId, listId = 'comments-list') {
+  const list = $(listId);
   list.innerHTML = '<p style="color:#5B6472;font-style:italic;">Loading...</p>';
 
   const { data, error } = await sb
@@ -2183,6 +2406,7 @@ function getAllHolidays(year) {
   return [...fixed, ...weekly].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+let holidayListExpanded = false;
 function renderHolidayWidget() {
   const nextEl = $('holiday-next');
   const listEl = $('holiday-list');
@@ -2213,7 +2437,10 @@ function renderHolidayWidget() {
   }
 
   const typeLabel = { public: 'Public', restricted: 'Restricted', weekly: 'Weekly Off' };
-  listEl.innerHTML = upcoming.slice(0, 40).map(h => `
+  const showAll = holidayListExpanded;
+  const visible = showAll ? upcoming.slice(0, 40) : upcoming.slice(0, 4);
+
+  listEl.innerHTML = visible.map(h => `
     <div class="holiday-row ${h.type}">
       <div class="hr-date">${formatDate(h.date)}</div>
       <div class="hr-info">
@@ -2222,6 +2449,9 @@ function renderHolidayWidget() {
       </div>
     </div>
   `).join('');
+
+  const btn = $('holiday-view-all-btn');
+  if (btn) btn.textContent = showAll ? '← Show less' : 'View Full Calendar →';
 }
 
 // =========================================================
@@ -2339,10 +2569,12 @@ async function initPushNotifications() {
 
 
 let cachedBossId = null;
+let cachedBossName = null;
 async function getBossId() {
   if (cachedBossId) return cachedBossId;
-  const { data } = await sb.from('profiles').select('id').eq('role', 'boss').limit(1).maybeSingle();
+  const { data } = await sb.from('profiles').select('id, full_name').eq('role', 'boss').limit(1).maybeSingle();
   cachedBossId = data?.id || null;
+  cachedBossName = data?.full_name || 'Boss';
   return cachedBossId;
 }
 
@@ -2511,7 +2743,8 @@ const SIDEBAR_NAV = {
     { page: 'employees', label: 'Employees', icon: '👥' }
   ],
   employee: [
-    { page: 'dashboard', label: 'Dashboard', icon: '🏠', badgeId: 'my-task-count' },
+    { page: 'dashboard', label: 'Dashboard', icon: '🏠' },
+    { page: 'inbox', label: 'Work Inbox', icon: '📥', badgeId: 'my-task-count' },
     { page: 'files', label: 'My Files', icon: '📄' },
     { page: 'tools', label: 'Tools', icon: '🛠️' }
   ]
@@ -2565,7 +2798,7 @@ function renderSidebarNav() {
 
 // keep the Work Inbox sidebar badge synced to the real task count
 function updateSidebarInboxBadge() {
-  const badge = $('snb-badge-dashboard');
+  const badge = $('snb-badge-inbox');
   const count = $('my-task-count');
   if (badge && count) badge.textContent = count.textContent;
 }
