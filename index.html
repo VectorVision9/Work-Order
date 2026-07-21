@@ -113,7 +113,10 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <span class="brand-mark-icon">▣</span>
-        <span class="brand">E-OFFICE</span>
+        <span class="brand-text">
+          <span class="brand">EDC</span>
+          <span class="brand-sub">WORK MANAGEMENT</span>
+        </span>
         <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse sidebar">◀</button>
       </div>
 
@@ -144,7 +147,10 @@
       <div class="topbar">
         <div class="topbar-left">
           <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Menu">☰</button>
-          <h1 id="app-title">Dashboard</h1>
+          <div>
+            <h1 id="app-title">Dashboard</h1>
+            <div class="topbar-greeting" id="who-label"></div>
+          </div>
         </div>
 
         <div class="topbar-search">
@@ -153,7 +159,7 @@
         </div>
 
         <div class="topbar-right">
-          <span class="who" id="who-label"></span>
+          <button id="fullscreen-btn" title="Toggle fullscreen">⛶</button>
           <div class="notif-bell-wrap">
             <button id="notif-bell-btn" title="Notifications">🔔<span class="notif-badge hidden" id="notif-badge">0</span></button>
             <div class="notif-panel hidden" id="notif-panel">
@@ -340,45 +346,63 @@
     <div id="employee-view" class="hidden">
 
       <div class="app-page" data-page-group="dashboard">
+        <div class="panel">
+          <h2>📢 Announcement Board <span class="tag" id="notice-count-tag-emp">0</span></h2>
+          <div class="notice-list" id="notice-list-emp"></div>
+        </div>
+
         <div class="emp-stat-cards" id="emp-stat-cards">
           <div class="emp-stat-card">
-            <div class="emp-stat-icon" style="background:linear-gradient(135deg,#4361EE,#7C3AED);">📋</div>
-            <div class="emp-stat-main">
-              <div class="emp-stat-value" id="es-my-tasks">0</div>
-              <div class="emp-stat-label">My Tasks</div>
+            <div class="emp-stat-icon-wrap" style="background:rgba(124,58,237,.18);">
+              <span style="color:#A78BFA;">📋</span>
             </div>
-            <div class="emp-stat-sub" id="es-my-tasks-sub">0 Pending · 0 In Progress</div>
+            <div class="emp-stat-value" id="es-my-tasks">0</div>
+            <div class="emp-stat-label">My Tasks</div>
+            <div class="emp-stat-divider"></div>
+            <div class="emp-stat-sub-row">
+              <div class="emp-stat-sub-item"><span class="essi-num" id="es-my-tasks-pending">0</span><span class="essi-label">Pending</span></div>
+              <div class="emp-stat-sub-item"><span class="essi-num" id="es-my-tasks-inprogress">0</span><span class="essi-label">In Progress</span></div>
+            </div>
           </div>
           <div class="emp-stat-card">
-            <div class="emp-stat-icon" style="background:linear-gradient(135deg,#2563EB,#3E7A5C);">✅</div>
-            <div class="emp-stat-main">
-              <div class="emp-stat-value" id="es-completed">0</div>
-              <div class="emp-stat-label">Completed This Month</div>
+            <div class="emp-stat-icon-wrap" style="background:rgba(34,197,94,.18);">
+              <span style="color:#4ADE80;">✅</span>
             </div>
-            <div class="emp-stat-sub" id="es-completed-sub">vs last month</div>
+            <div class="emp-stat-value" id="es-completed">0</div>
+            <div class="emp-stat-label">Completed This Month</div>
+            <div class="emp-stat-divider"></div>
+            <div class="emp-stat-sub-row" id="es-completed-sub">
+              <div class="emp-stat-sub-item emp-stat-sub-item-wide"><span class="essi-trend" id="es-completed-trend">—</span><span class="essi-label">vs last month</span></div>
+            </div>
           </div>
           <div class="emp-stat-card">
-            <div class="emp-stat-icon" style="background:linear-gradient(135deg,#0B1E3D,#4A90E2);">👥</div>
-            <div class="emp-stat-main">
-              <div class="emp-stat-value" id="es-team">0</div>
-              <div class="emp-stat-label">Team Members</div>
+            <div class="emp-stat-icon-wrap" style="background:rgba(74,144,226,.18);">
+              <span style="color:#7DB4F0;">👥</span>
             </div>
-            <div class="emp-stat-sub" id="es-team-sub">0 Online · 0 Offline</div>
+            <div class="emp-stat-value" id="es-team">0</div>
+            <div class="emp-stat-label">Team Members</div>
+            <div class="emp-stat-divider"></div>
+            <div class="emp-stat-sub-row">
+              <div class="emp-stat-sub-item"><span class="essi-num" id="es-team-online">0</span><span class="essi-label">Online</span></div>
+              <div class="emp-stat-sub-item"><span class="essi-num" id="es-team-offline">0</span><span class="essi-label">Offline</span></div>
+            </div>
           </div>
           <div class="emp-stat-card">
-            <div class="emp-stat-icon" style="background:linear-gradient(135deg,#B23A2E,#DB2777);">📅</div>
-            <div class="emp-stat-main">
-              <div class="emp-stat-value" id="es-deadlines">0</div>
-              <div class="emp-stat-label">Upcoming Deadlines</div>
+            <div class="emp-stat-icon-wrap" style="background:rgba(219,39,119,.18);">
+              <span style="color:#F472B6;">📅</span>
             </div>
-            <div class="emp-stat-sub" id="es-deadlines-sub">0 Today · 0 This Week</div>
+            <div class="emp-stat-value" id="es-deadlines">0</div>
+            <div class="emp-stat-label">Upcoming Deadlines</div>
+            <div class="emp-stat-divider"></div>
+            <div class="emp-stat-sub-row">
+              <div class="emp-stat-sub-item"><span class="essi-num" id="es-deadlines-today">0</span><span class="essi-label">Today</span></div>
+              <div class="emp-stat-sub-item"><span class="essi-num" id="es-deadlines-week">0</span><span class="essi-label">This Week</span></div>
+            </div>
           </div>
         </div>
 
         <div class="emp-top-grid">
           <div class="emp-top-main">
-            <div class="id-card-grid employee-id-strip" id="employee-id-strip"></div>
-
             <div class="panel">
               <h2>Team Status <span class="tag" id="team-status-count">0</span></h2>
               <div class="team-status-list" id="team-status-list"></div>
@@ -395,13 +419,6 @@
           </div>
         </div>
 
-        <div class="panel">
-          <h2>📢 Announcement Board <span class="tag" id="notice-count-tag-emp">0</span></h2>
-          <div class="notice-list" id="notice-list-emp"></div>
-        </div>
-      </div>
-
-      <div class="app-page" data-page-group="inbox">
         <div class="panel panel-clipboard">
           <div class="inbox-header">
             <h2>📥 Work Inbox <span class="tag" id="my-task-count">0</span></h2>
@@ -419,6 +436,18 @@
           </div>
 
           <div class="ticket-grid" id="my-tickets"></div>
+        </div>
+
+        <div class="tools-utilities-footer">
+          <div class="tu-label">Tools &amp; Utilities</div>
+          <div class="tu-row">
+            <button type="button" class="tu-btn" data-tu-page="files"><span class="tu-icon">📁</span>My Files</button>
+            <button type="button" class="tu-btn" data-tu-page="tools"><span class="tu-icon">🛠️</span>Tools</button>
+            <button type="button" class="tu-btn" id="tu-settings-btn"><span class="tu-icon">⚙️</span>Settings</button>
+            <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📅</span>Calendar</button>
+            <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📊</span>Reports</button>
+            <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📁</span>Projects</button>
+          </div>
         </div>
       </div>
 
