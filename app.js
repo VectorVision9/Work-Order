@@ -66,6 +66,15 @@ function toggleTheme() {
   if ($('an-total') && typeof Chart !== 'undefined') renderAnalytics();
 }
 $('theme-toggle-btn').addEventListener('click', toggleTheme);
+
+// ---- fullscreen toggle ----
+$('fullscreen-btn').addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
+});
 function showApp() {
   $('auth-view').classList.add('hidden');
   $('app-view').classList.remove('hidden');
@@ -113,7 +122,7 @@ async function onLoggedIn(user) {
   }
 
   currentProfile = profile;
-  $('who-label').textContent = `${profile.full_name} · ${profile.role.toUpperCase()}`;
+  $('who-label').textContent = `Welcome back, ${profile.full_name}`;
   showApp();
   applyTheme(getThemePref());
   renderDailyQuote();
@@ -691,7 +700,8 @@ function renderEmployeeStatCards() {
   const pending = myTasks.filter(t => t.status === 'assigned' || t.status === 'accepted').length;
   const inProgress = myTasks.filter(t => t.status === 'in_progress').length;
   $('es-my-tasks').textContent = pending + inProgress;
-  $('es-my-tasks-sub').textContent = `${pending} Pending · ${inProgress} In Progress`;
+  $('es-my-tasks-pending').textContent = pending;
+  $('es-my-tasks-inprogress').textContent = inProgress;
 
   const now = new Date();
   const thisMonthCount = myTasks.filter(t => t.status === 'complete' && t.completed_at &&
@@ -702,17 +712,19 @@ function renderEmployeeStatCards() {
     new Date(t.completed_at).getFullYear() === lastMonthDate.getFullYear() &&
     new Date(t.completed_at).getMonth() === lastMonthDate.getMonth()).length;
   $('es-completed').textContent = thisMonthCount;
+  const trendEl = $('es-completed-trend');
   if (lastMonthCount === 0) {
-    $('es-completed-sub').textContent = thisMonthCount > 0 ? 'vs 0 last month' : 'No data last month';
+    trendEl.textContent = thisMonthCount > 0 ? 'New' : '—';
   } else {
     const pct = Math.round(((thisMonthCount - lastMonthCount) / lastMonthCount) * 100);
-    $('es-completed-sub').textContent = `${pct >= 0 ? '↑' : '↓'} ${Math.abs(pct)}% vs last month`;
+    trendEl.textContent = `${pct >= 0 ? '↑' : '↓'} ${Math.abs(pct)}%`;
   }
 
   const total = employeeDirectoryCache.length;
   const online = employeeDirectoryCache.filter(e => getOnlineStatus(e.last_seen_at).online).length;
   $('es-team').textContent = total;
-  $('es-team-sub').textContent = `${online} Online · ${total - online} Offline`;
+  $('es-team-online').textContent = online;
+  $('es-team-offline').textContent = total - online;
 
   const todayStr = toDateStr(new Date());
   const weekAhead = toDateStr(addDays(new Date(), 7));
@@ -720,6 +732,8 @@ function renderEmployeeStatCards() {
   const dueToday = openMyTasks.filter(t => t.deadline === todayStr).length;
   const dueThisWeek = openMyTasks.filter(t => t.deadline > todayStr && t.deadline <= weekAhead).length;
   $('es-deadlines').textContent = dueToday + dueThisWeek;
+  $('es-deadlines-today').textContent = dueToday;
+  $('es-deadlines-week').textContent = dueThisWeek;
   $('es-deadlines-sub').textContent = `${dueToday} Today · ${dueThisWeek} This Week`;
 }
 
@@ -924,7 +938,7 @@ function renderMyTickets(tasks) {
     card.innerHTML = `
       <div class="stamp ${meta.cls}">${meta.icon} ${meta.label}</div>
       <span class="wo-number">${getWoNumber(t)}</span>
-      <div class="assignee"><span class="chip">${getInitials(assigneeName)}</span>${isMine ? 'Assigned to you' : 'Assigned to ' + escapeHtml(t.employee?.full_name || 'someone else')}</div>
+      <div class="assignee"><span class="chip ${getAvatarColorClass(assigneeName)}">${getInitials(assigneeName)}</span>${isMine ? 'Assigned to you' : 'Assigned to ' + escapeHtml(t.employee?.full_name || 'someone else')}</div>
       <h3>${escapeHtml(t.title)}</h3>
       ${t.description ? `<p class="desc">${escapeHtml(t.description)}</p>` : ''}
       <div class="meta ${isOverdue(t) ? 'overdue' : ''}">Deadline: ${formatDate(t.deadline)}${dl ? ` &nbsp;·&nbsp; <span class="days-left ${dl.overdue ? 'overdue' : ''}">⏱ ${dl.text}</span>` : ''}</div>
@@ -1159,6 +1173,13 @@ function getInitials(name) {
     ? parts[0].slice(0, 2)
     : parts[0][0] + parts[parts.length - 1][0];
   return initials.toUpperCase();
+}
+
+function getAvatarColorClass(name) {
+  if (!name) return 'chip-0';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return 'chip-' + (Math.abs(hash) % 5);
 }
 
 function employeeCode(emp) {
@@ -2015,7 +2036,7 @@ function stopPresenceHeartbeat() {
 }
 
 function getOnlineStatus(lastSeenAt) {
-  if (!lastSeenAt) return { online: false, label: 'Never logged in' };
+  if (!lastSeenAt) return { online: false, label: 'Offline' };
   const diffMs = Date.now() - new Date(lastSeenAt).getTime();
   const mins = Math.floor(diffMs / 60000);
   if (mins < 2) return { online: true, label: 'Online now' };
@@ -2051,7 +2072,7 @@ function renderTeamStatus() {
     const taskCount = allTasksCache.filter(t => t.assigned_to === e.id && t.status !== 'complete').length;
     return `
       <div class="team-status-row" data-employee-id="${e.id}" data-employee-name="${escapeHtml(e.full_name)}">
-        <span class="chip">${getInitials(e.full_name)}</span>
+        <span class="chip ${getAvatarColorClass(e.full_name)}">${getInitials(e.full_name)}</span>
         <span class="team-status-name">${escapeHtml(e.full_name)}</span>
         <span class="team-status-badge ${status.online ? 'online' : ''}">
           <span class="ic-status-dot ${status.online ? '' : 'offline'}"></span>${escapeHtml(status.label)}
@@ -2490,8 +2511,7 @@ const SIDEBAR_NAV = {
     { page: 'employees', label: 'Employees', icon: '👥' }
   ],
   employee: [
-    { page: 'dashboard', label: 'Dashboard', icon: '🏠' },
-    { page: 'inbox', label: 'Work Inbox', icon: '📥', badgeId: 'my-task-count' },
+    { page: 'dashboard', label: 'Dashboard', icon: '🏠', badgeId: 'my-task-count' },
     { page: 'files', label: 'My Files', icon: '📄' },
     { page: 'tools', label: 'Tools', icon: '🛠️' }
   ]
@@ -2545,7 +2565,7 @@ function renderSidebarNav() {
 
 // keep the Work Inbox sidebar badge synced to the real task count
 function updateSidebarInboxBadge() {
-  const badge = $('snb-badge-inbox');
+  const badge = $('snb-badge-dashboard');
   const count = $('my-task-count');
   if (badge && count) badge.textContent = count.textContent;
 }
@@ -2640,4 +2660,15 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('.topbar-search')) searchResultsEl.classList.add('hidden');
 });
 
+// ---- Tools & Utilities footer (dashboard) ----
+document.querySelectorAll('.tu-btn[data-tu-page]').forEach(btn => {
+  btn.addEventListener('click', () => showPage(btn.dataset.tuPage));
+});
+const tuSettingsBtn = $('tu-settings-btn');
+if (tuSettingsBtn) tuSettingsBtn.addEventListener('click', () => $('change-pw-btn').click());
+document.querySelectorAll('.tu-btn-soon').forEach(btn => {
+  btn.addEventListener('click', () => alert('Coming soon!'));
+});
+
 boot();
+
