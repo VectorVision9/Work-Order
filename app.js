@@ -67,9 +67,12 @@ function toggleTheme() {
 }
 $('theme-toggle-btn').addEventListener('click', toggleTheme);
 
-$('holiday-view-all-btn').addEventListener('click', () => {
-  holidayListExpanded = !holidayListExpanded;
-  renderHolidayWidget();
+['holiday-view-all-btn', 'holiday-view-all-btn-boss'].forEach(id => {
+  const btn = $(id);
+  if (btn) btn.addEventListener('click', () => {
+    holidayListExpanded = !holidayListExpanded;
+    renderHolidayWidget();
+  });
 });
 
 // ---- fullscreen toggle ----
@@ -216,6 +219,8 @@ async function loadBossData() {
   await Promise.all([loadEmployees(), loadTasks(), loadNotices(), loadRecurringTasks()]);
   renderEmployeeOfMonth();
   renderAnalytics();
+  renderTeamStatus();
+  renderHolidayWidget();
 }
 
 async function loadEmployees() {
@@ -2231,6 +2236,7 @@ async function refreshPresenceDisplays() {
   if (!currentProfile) return;
   if (currentProfile.role === 'boss') {
     await loadEmployees();
+    renderTeamStatus();
   } else {
     const { data: dir } = await sb
       .from('profiles')
@@ -2271,12 +2277,16 @@ function getOnlineStatus(lastSeenAt) {
 }
 
 function renderTeamStatus() {
-  const list = $('team-status-list');
-  const tag = $('team-status-count');
+  const isBoss = currentProfile?.role === 'boss';
+  const list = $(isBoss ? 'team-status-list-boss' : 'team-status-list');
+  const tag = $(isBoss ? 'team-status-count-boss' : 'team-status-count');
   if (!list) return;
 
-  const others = employeeDirectoryCache.filter(e => e.id !== currentUser.id);
-  tag.textContent = employeeDirectoryCache.length;
+  // Boss sees every employee (boss isn't in employeesCache themselves, so no
+  // self-exclusion needed); an employee sees their peers, excluding themselves.
+  const source = isBoss ? employeesCache : employeeDirectoryCache;
+  const others = isBoss ? source : source.filter(e => e.id !== currentUser.id);
+  tag.textContent = source.length;
 
   if (others.length === 0) {
     list.innerHTML = '<p class="notice-empty">No other teammates yet.</p>';
@@ -2408,8 +2418,9 @@ function getAllHolidays(year) {
 
 let holidayListExpanded = false;
 function renderHolidayWidget() {
-  const nextEl = $('holiday-next');
-  const listEl = $('holiday-list');
+  const isBoss = currentProfile?.role === 'boss';
+  const nextEl = $(isBoss ? 'holiday-next-boss' : 'holiday-next');
+  const listEl = $(isBoss ? 'holiday-list-boss' : 'holiday-list');
   if (!nextEl || !listEl) return;
 
   const todayStr = toDateStr(new Date());
@@ -2450,7 +2461,7 @@ function renderHolidayWidget() {
     </div>
   `).join('');
 
-  const btn = $('holiday-view-all-btn');
+  const btn = $(isBoss ? 'holiday-view-all-btn-boss' : 'holiday-view-all-btn');
   if (btn) btn.textContent = showAll ? '← Show less' : 'View Full Calendar →';
 }
 
@@ -2899,9 +2910,10 @@ document.querySelectorAll('.tu-btn[data-tu-page]').forEach(btn => {
 });
 const tuSettingsBtn = $('tu-settings-btn');
 if (tuSettingsBtn) tuSettingsBtn.addEventListener('click', () => $('change-pw-btn').click());
+const tuSettingsBtnBoss = $('tu-settings-btn-boss');
+if (tuSettingsBtnBoss) tuSettingsBtnBoss.addEventListener('click', () => $('change-pw-btn').click());
 document.querySelectorAll('.tu-btn-soon').forEach(btn => {
   btn.addEventListener('click', () => alert('Coming soon!'));
 });
 
 boot();
-
