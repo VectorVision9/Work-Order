@@ -1386,27 +1386,39 @@ body.app-theme .tool-note{color:#93A4BC;}
 .stat-cards{
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  gap:14px;
+  gap:16px;
   margin-bottom:24px;
 }
 .stat-card{
-  background:rgba(255,255,255,.04);
+  background:#fff;
   border:1px solid var(--paper-line);
-  border-radius:10px;
-  padding:16px;
-  text-align:center;
+  border-radius:12px;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  text-align:left;
+}
+.stat-card-icon-wrap{
+  width:42px;height:42px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:19px;
+  margin-bottom:10px;
 }
 .stat-card-value{
   font-family:'Space Grotesk',sans-serif;
-  font-size:26px;
   font-weight:700;
+  font-size:30px;
+  line-height:1.1;
+  color:var(--ink);
 }
 .stat-card-label{
-  font-size:11px;
+  font-size:11.5px;
   text-transform:uppercase;
-  letter-spacing:.05em;
+  letter-spacing:.04em;
   color:var(--slate);
-  margin-top:6px;
+  margin-top:2px;
 }
 
 .analytics-charts{
@@ -1441,6 +1453,7 @@ body.app-theme .tool-note{color:#93A4BC;}
 
 /* dark-theme versions (both dashboards now share app-theme, so these apply everywhere) */
 body.app-theme .stat-card{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;}
+body.app-theme .stat-card-value{color:#fff;}
 body.app-theme .stat-card-label{color:#93A4BC;}
 body.app-theme .chart-box{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);}
 body.app-theme .chart-box h3{color:#E7ECF3;}
