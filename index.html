@@ -232,22 +232,34 @@
 
               <div class="stat-cards">
                 <div class="stat-card">
+                  <div class="stat-card-icon-wrap" style="background:rgba(124,58,237,.18);">
+                    <span style="color:#A78BFA;">📋</span>
+                  </div>
                   <div class="stat-card-value" id="an-total">0</div>
                   <div class="stat-card-label">Total tasks</div>
                 </div>
-          <div class="stat-card">
-            <div class="stat-card-value" id="an-completion-rate">0%</div>
-            <div class="stat-card-label">Completion rate</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-value" id="an-overdue">0</div>
-            <div class="stat-card-label">Overdue right now</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-value" id="an-avg-turnaround">—</div>
-            <div class="stat-card-label">Avg. days to complete</div>
-          </div>
-        </div>
+                <div class="stat-card">
+                  <div class="stat-card-icon-wrap" style="background:rgba(34,197,94,.18);">
+                    <span style="color:#4ADE80;">✅</span>
+                  </div>
+                  <div class="stat-card-value" id="an-completion-rate">0%</div>
+                  <div class="stat-card-label">Completion rate</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-card-icon-wrap" style="background:rgba(219,39,119,.18);">
+                    <span style="color:#F472B6;">⚠️</span>
+                  </div>
+                  <div class="stat-card-value" id="an-overdue">0</div>
+                  <div class="stat-card-label">Overdue right now</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-card-icon-wrap" style="background:rgba(74,144,226,.18);">
+                    <span style="color:#7DB4F0;">⏱️</span>
+                  </div>
+                  <div class="stat-card-value" id="an-avg-turnaround">—</div>
+                  <div class="stat-card-label">Avg. days to complete</div>
+                </div>
+              </div>
 
         <div class="analytics-charts">
           <div class="chart-box">
@@ -262,6 +274,36 @@
             <h3>Completions — last 14 days</h3>
             <div class="chart-canvas-wrap"><canvas id="chart-trend"></canvas></div>
           </div>
+        </div>
+      </div>
+
+      <div class="emp-top-grid">
+        <div class="emp-top-main">
+          <div class="panel">
+            <h2>Team Status <span class="tag" id="team-status-count-boss">0</span></h2>
+            <div class="team-status-list" id="team-status-list-boss"></div>
+          </div>
+        </div>
+
+        <div class="emp-top-side">
+          <div class="panel holiday-panel">
+            <h2>🎉 Holidays <span class="tag">2026</span></h2>
+            <div class="holiday-next" id="holiday-next-boss">Loading...</div>
+            <div class="holiday-list" id="holiday-list-boss"></div>
+            <button type="button" class="btn-secondary holiday-view-all-btn" id="holiday-view-all-btn-boss">View Full Calendar →</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tools-utilities-footer">
+        <div class="tu-label">Tools &amp; Utilities</div>
+        <div class="tu-row">
+          <button type="button" class="tu-btn" data-tu-page="tasks"><span class="tu-icon">📋</span>All Tasks</button>
+          <button type="button" class="tu-btn" data-tu-page="employees"><span class="tu-icon">👥</span>Employees</button>
+          <button type="button" class="tu-btn" id="tu-settings-btn-boss"><span class="tu-icon">⚙️</span>Settings</button>
+          <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📅</span>Calendar</button>
+          <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📊</span>Reports</button>
+          <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📁</span>Projects</button>
         </div>
       </div>
     </div>
