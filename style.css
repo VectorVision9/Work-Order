@@ -425,9 +425,18 @@ tbody tr:last-child td{border-bottom:none;}
    ========================================================= */
 .id-card-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+  grid-template-columns:repeat(4,1fr);
   gap:22px;
   perspective:1200px;
+}
+@media (max-width:1200px){
+  .id-card-grid{grid-template-columns:repeat(3,1fr);}
+}
+@media (max-width:900px){
+  .id-card-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:600px){
+  .id-card-grid{grid-template-columns:1fr;}
 }
 
 .id-card{
@@ -1041,24 +1050,11 @@ tbody tr:last-child td{border-bottom:none;}
 .ticket .assignee .chip{width:26px;height:26px;font-size:11px;}
 
 /* =========================================================
-   Team clipboard — background texture
+   Team clipboard (Work Inbox) — now matches standard .panel
+   styling (light/dark theme-responsive) like every other panel.
+   The old forced dark navy + grid-texture background applied
+   unconditionally in both themes and has been removed.
    ========================================================= */
-body.app-theme .panel.panel-clipboard, .panel.panel-clipboard{
-  position:relative;
-  overflow:hidden;
-  background-color:#1A2C46;
-  background-image:
-    radial-gradient(circle at 15% 20%, rgba(0,224,255,.12), transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(201,127,10,.14), transparent 45%),
-    repeating-linear-gradient(0deg, rgba(255,255,255,.04) 0px, rgba(255,255,255,.04) 1px, transparent 1px, transparent 26px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0px, rgba(255,255,255,.04) 1px, transparent 1px, transparent 26px);
-}
-.panel.panel-clipboard h2, .panel.panel-clipboard > p{color:#fff !important;}
-.panel.panel-clipboard > p{color:#A9BBD1 !important;}
-.panel.panel-clipboard .tag{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#D8DFE8;}
-/* Prefer your own photo? Replace the background-image above with:
-   background-image: url('your-image.jpg'); background-size:cover; background-position:center;
-   then layer a dark overlay: background-blend-mode:multiply; background-color: rgba(10,20,35,.75); */
 
 /* =========================================================
    UNIFIED TECHY DASHBOARD THEME — boss + employee alike
@@ -1467,12 +1463,17 @@ body.app-theme .chart-box h3{color:#E7ECF3;}
   font-size:10px;
   text-transform:uppercase;
   letter-spacing:.04em;
-  color:#8FA3BC;
-  background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.14);
+  color:var(--slate);
+  background:var(--paper);
+  border:1px solid var(--paper-line);
   padding:2px 8px;
   border-radius:12px;
   margin-left:6px;
+}
+body.app-theme .recur-tag{
+  color:#8FA3BC;
+  background:rgba(255,255,255,.06);
+  border-color:rgba(255,255,255,.14);
 }
 
 /* =========================================================
