@@ -20,6 +20,19 @@ let employeesCache = [];
 // ---------- element shortcuts ----------
 const $ = (id) => document.getElementById(id);
 
+// ---------- capacitor / native helpers ----------
+function isNativeApp() {
+  return Boolean(window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
+function getCapacitorPlugin(name) {
+  if (!window.Capacitor) return null;
+  if (typeof window.Capacitor.registerPlugin === 'function') {
+    return window.Capacitor.registerPlugin(name);
+  }
+  return window.Capacitor.Plugins ? window.Capacitor.Plugins[name] : null;
+}
+
 // ---------- ripple effect (modern button interaction, all dashboards) ----------
 const RIPPLE_SELECTOR = '.btn-primary, .btn-secondary, .btn-secondary-small, .ic-remove, .topbar-right button';
 document.addEventListener('click', (e) => {
@@ -38,8 +51,142 @@ document.addEventListener('click', (e) => {
   ripple.addEventListener('animationend', () => ripple.remove());
 });
 
+// ---------- startup splash & native splash helpers ----------
+let splashDismissed = false;
+function dismissAppSplash() {
+  if (splashDismissed) return;
+  splashDismissed = true;
+  const splash = $('app-splash');
+  if (splash) {
+    splash.classList.add('hidden');
+    setTimeout(() => {
+      splash.style.display = 'none';
+    }, 300);
+  }
+}
+
+function hideNativeSplash() {
+  try {
+    const SplashScreen = window.Capacitor?.Plugins?.SplashScreen || window.Capacitor?.registerPlugin?.('SplashScreen');
+    if (SplashScreen && typeof SplashScreen.hide === 'function') {
+      SplashScreen.hide();
+    }
+  } catch (err) {
+    console.warn('Could not hide native splash:', err);
+  }
+}
+
+// 8-second safety timeout so splash can never get stuck under any circumstance
+setTimeout(() => {
+  dismissAppSplash();
+  hideNativeSplash();
+}, 8000);
+
+// ---------- cached profile & session helpers ----------
+function getCachedProfile() {
+  try {
+    const raw = localStorage.getItem('eoffice-cached-profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setCachedProfile(profile) {
+  try {
+    if (profile) {
+      localStorage.setItem('eoffice-cached-profile', JSON.stringify(profile));
+    } else {
+      localStorage.removeItem('eoffice-cached-profile');
+    }
+  } catch (e) {
+    console.warn('Error saving cached profile:', e);
+  }
+}
+
+function getStoredSession() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        const val = localStorage.getItem(key);
+        if (val) {
+          const parsed = JSON.parse(val);
+          if (parsed && (parsed.access_token || parsed.user)) {
+            return parsed;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading stored session:', e);
+  }
+  return null;
+}
+
+function renderDashboardPlaceholders(role) {
+  if (role === 'boss') {
+    const elList = $('employee-list');
+    if (elList && !elList.children.length) {
+      elList.innerHTML = `
+        <div class="skeleton-block skeleton-card"></div>
+        <div class="skeleton-block skeleton-card"></div>
+        <div class="skeleton-block skeleton-card"></div>
+      `;
+    }
+    const tsBoss = $('team-status-list-boss');
+    if (tsBoss && !tsBoss.children.length) {
+      tsBoss.innerHTML = `
+        <div class="skeleton-block skeleton-row"></div>
+        <div class="skeleton-block skeleton-row"></div>
+        <div class="skeleton-block skeleton-row"></div>
+      `;
+    }
+    const nList = $('notice-list');
+    if (nList && !nList.children.length) {
+      nList.innerHTML = `<div class="skeleton-block skeleton-card"></div>`;
+    }
+    const statTotal = $('stat-total');
+    if (statTotal && !statTotal.textContent.trim()) statTotal.textContent = '...';
+    const statPending = $('stat-pending');
+    if (statPending && !statPending.textContent.trim()) statPending.textContent = '...';
+    const statComplete = $('stat-complete');
+    if (statComplete && !statComplete.textContent.trim()) statComplete.textContent = '...';
+    const statOverdue = $('stat-overdue');
+    if (statOverdue && !statOverdue.textContent.trim()) statOverdue.textContent = '...';
+  } else {
+    const myGrid = $('my-task-grid');
+    if (myGrid && !myGrid.children.length) {
+      myGrid.innerHTML = `
+        <div class="skeleton-block skeleton-card"></div>
+        <div class="skeleton-block skeleton-card"></div>
+      `;
+    }
+    const tsEmp = $('team-status-list');
+    if (tsEmp && !tsEmp.children.length) {
+      tsEmp.innerHTML = `
+        <div class="skeleton-block skeleton-row"></div>
+        <div class="skeleton-block skeleton-row"></div>
+        <div class="skeleton-block skeleton-row"></div>
+      `;
+    }
+    const nListEmp = $('notice-list-emp');
+    if (nListEmp && !nListEmp.children.length) {
+      nListEmp.innerHTML = `<div class="skeleton-block skeleton-card"></div>`;
+    }
+    const esPending = $('es-pending');
+    if (esPending && !esPending.textContent.trim()) esPending.textContent = '...';
+    const esCompleted = $('es-completed');
+    if (esCompleted && !esCompleted.textContent.trim()) esCompleted.textContent = '...';
+    const esOverdue = $('es-overdue');
+    if (esOverdue && !esOverdue.textContent.trim()) esOverdue.textContent = '...';
+  }
+}
+
 // ---------- view switching ----------
 function showAuth() {
+  dismissAppSplash();
+  hideNativeSplash();
   $('auth-view').classList.remove('hidden');
   $('app-view').classList.add('hidden');
   document.body.classList.remove('app-theme');
@@ -55,6 +202,10 @@ function applyTheme(theme) {
   document.body.classList.toggle('app-theme', theme === 'dark');
   const btn = $('theme-toggle-btn');
   if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  const setBtn = $('settings-theme-toggle-btn');
+  if (setBtn) setBtn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+  const setDesc = $('set-theme-desc');
+  if (setDesc) setDesc.textContent = theme === 'dark' ? 'Current: Dark mode' : 'Current: Light mode';
 }
 function toggleTheme() {
   const next = getThemePref() === 'dark' ? 'light' : 'dark';
@@ -70,8 +221,7 @@ $('theme-toggle-btn').addEventListener('click', toggleTheme);
 ['holiday-view-all-btn', 'holiday-view-all-btn-boss'].forEach(id => {
   const btn = $(id);
   if (btn) btn.addEventListener('click', () => {
-    holidayListExpanded = !holidayListExpanded;
-    renderHolidayWidget();
+    showPage('calendar');
   });
 });
 
@@ -99,11 +249,65 @@ $('show-login').addEventListener('click', () => {
 
 // ---------- boot ----------
 async function boot() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    await onLoggedIn(session.user);
+  const stored = getStoredSession();
+
+  if (stored) {
+    // 1. Instant decision: user has stored credentials, go straight to dashboard
+    const cachedProfile = getCachedProfile();
+    const role = cachedProfile?.role || 'employee';
+
+    // Mount dashboard UI with placeholders immediately — NO LOGIN FLASH!
+    applyTheme(getThemePref());
+    showApp();
+    renderDashboardPlaceholders(role);
+
+    if (cachedProfile) {
+      currentProfile = cachedProfile;
+      $('who-label').textContent = `Welcome back, ${cachedProfile.full_name}`;
+      $('sidebar-user-avatar').textContent = getInitials(cachedProfile.full_name);
+      $('sidebar-user-name').textContent = cachedProfile.full_name;
+      $('sidebar-user-role').textContent = cachedProfile.role === 'boss' ? 'Boss' : (cachedProfile.designation || 'Employee');
+      renderSidebarNav();
+      if (role === 'boss') {
+        $('boss-view').classList.remove('hidden');
+        $('employee-view').classList.add('hidden');
+      } else {
+        $('employee-view').classList.remove('hidden');
+        $('boss-view').classList.add('hidden');
+      }
+    }
+
+    // Dismiss splash once first screen (dashboard with placeholders) is ready
+    dismissAppSplash();
+    hideNativeSplash();
+
+    // 2. Background verification with sb.auth.getSession()
+    try {
+      const { data: { session }, error } = await sb.auth.getSession();
+      if (session) {
+        await onLoggedIn(session.user);
+      } else if (error) {
+        console.warn('Session verification error:', error);
+        // Only log out if verification clearly fails on an online connection (not when offline)
+        if (navigator.onLine && (error.status === 400 || error.status === 401 || error.message?.toLowerCase().includes('invalid') || error.message?.toLowerCase().includes('revoked'))) {
+          setCachedProfile(null);
+          await sb.auth.signOut();
+        }
+      } else {
+        // Explicit null session from server (e.g. token expired/revoked)
+        if (navigator.onLine) {
+          setCachedProfile(null);
+          await sb.auth.signOut();
+        }
+      }
+    } catch (netErr) {
+      console.warn('Network error during session verification, keeping cached session:', netErr);
+    }
   } else {
+    // No stored session: show login screen immediately
     showAuth();
+    dismissAppSplash();
+    hideNativeSplash();
   }
 }
 
@@ -111,6 +315,7 @@ sb.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     currentUser = null;
     currentProfile = null;
+    setCachedProfile(null);
     showAuth();
   }
 });
@@ -124,12 +329,16 @@ async function onLoggedIn(user) {
     .single();
 
   if (error || !profile) {
+    setCachedProfile(null);
     $('login-error').textContent = 'Could not load your profile. Contact your admin.';
     await sb.auth.signOut();
     return;
   }
 
   currentProfile = profile;
+  setCachedProfile(profile);
+  dismissAppSplash();
+  hideNativeSplash();
   $('who-label').textContent = `Welcome back, ${profile.full_name}`;
   showApp();
   applyTheme(getThemePref());
@@ -206,21 +415,35 @@ $('signup-form').addEventListener('submit', async (e) => {
   await onLoggedIn(data.user);
 });
 
-// ---------- logout ----------
-$('logout-btn').addEventListener('click', async () => {
-  await sb.auth.signOut();
-});
+async function confirmLogout() {
+  if (confirm('Are you sure you want to log out?')) {
+    closeMobileDrawer();
+    const pwModal = $('change-pw-modal');
+    if (pwModal) pwModal.classList.add('hidden');
+    await sb.auth.signOut();
+  }
+}
+
+// ---------- logout handlers ----------
+$('logout-btn').addEventListener('click', confirmLogout);
+const sidebarLogoutBtn = $('sidebar-logout-btn');
+if (sidebarLogoutBtn) sidebarLogoutBtn.addEventListener('click', confirmLogout);
+const settingsLogoutBtn = $('settings-logout-btn');
+if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', confirmLogout);
+
 
 // =========================================================
 // BOSS DASHBOARD
 // =========================================================
 async function loadBossData() {
   await generateRecurringTasks();
-  await Promise.all([loadEmployees(), loadTasks(), loadNotices(), loadRecurringTasks()]);
+  await Promise.all([loadEmployees(), loadTasks(), loadNotices(), loadRecurringTasks(), loadBossStorageData()]);
   renderEmployeeOfMonth();
   renderAnalytics();
   renderTeamStatus();
   renderHolidayWidget();
+  loadRecentActivityFeed();
+  if (currentAppPage === 'calendar') renderCalendarPage();
 }
 
 async function loadEmployees() {
@@ -343,25 +566,29 @@ function renderTasksTable() {
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No tasks match this view yet.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No tasks match this view yet.</td></tr>';
     return;
   }
 
   rows.forEach(t => {
     const meta = statusMeta(t);
     const tr = document.createElement('tr');
+    tr.className = 'task-row';
+    const isCompleted = t.status === 'complete' && t.completed_at;
+    const completedText = isCompleted ? formatDateTime(t.completed_at) : '-';
     tr.innerHTML = `
-      <td>${escapeHtml(t.employee?.full_name || 'Unassigned')}</td>
-      <td><strong>${escapeHtml(t.title)}</strong>${t.description ? `<div style="color:#5B6472;font-size:12px;margin-top:4px;">${escapeHtml(t.description)}</div>` : ''}</td>
-      <td>${formatDate(t.deadline)}</td>
-      <td><span class="badge ${meta.cls}">${meta.icon} ${meta.label}</span></td>
-      <td>${formatDate(t.created_at)}</td>
-      <td style="white-space:nowrap;">
-        <button class="btn-text-small" data-history="${t.id}" data-title="${escapeHtml(t.title)}">View</button>
-        &nbsp;·&nbsp;
-        <button class="btn-text-small" data-comments="${t.id}" data-title="${escapeHtml(t.title)}">💬 Comments</button>
-        &nbsp;·&nbsp;
-        <button class="btn-danger-text" data-delete-task="${t.id}" data-task-title="${escapeHtml(t.title)}">Delete</button>
+      <td class="cell-employee" data-label="Employee">${escapeHtml(t.employee?.full_name || 'Unassigned')}</td>
+      <td class="cell-task" data-label="Task"><strong>${escapeHtml(t.title)}</strong>${t.description ? `<div class="task-desc" style="color:#5B6472;font-size:12px;margin-top:4px;">${escapeHtml(t.description)}</div>` : ''}</td>
+      <td class="cell-deadline" data-label="Deadline">${formatDate(t.deadline)}</td>
+      <td class="cell-status" data-label="Status"><span class="badge ${meta.cls}">${meta.icon} ${meta.label}</span></td>
+      <td class="cell-assigned" data-label="Assigned">${formatDate(t.created_at)}</td>
+      <td class="cell-completed ${isCompleted ? '' : 'cell-empty'}" data-label="Completed">${completedText}</td>
+      <td class="cell-actions" data-label="Actions">
+        <button class="btn-text-small action-btn" data-history="${t.id}" data-title="${escapeHtml(t.title)}">View</button>
+        <span class="action-sep">&nbsp;·&nbsp;</span>
+        <button class="btn-text-small action-btn" data-comments="${t.id}" data-title="${escapeHtml(t.title)}">💬 Comments</button>
+        <span class="action-sep">&nbsp;·&nbsp;</span>
+        <button class="btn-danger-text action-btn" data-delete-task="${t.id}" data-task-title="${escapeHtml(t.title)}">Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -540,37 +767,94 @@ $('add-employee-form').addEventListener('submit', async (e) => {
 });
 
 // ---------- PDF export ----------
-$('download-pdf-btn').addEventListener('click', () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+$('download-pdf-btn').addEventListener('click', async () => {
+  const btn = $('download-pdf-btn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Generating PDF...';
 
-  doc.setFontSize(16);
-  doc.text('E-Office — Task Report', 14, 16);
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text(`Generated ${new Date().toLocaleString()}`, 14, 22);
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
 
-  const rows = allTasksCache.map(t => {
-    const meta = statusMeta(t);
-    return [
-      t.employee?.full_name || 'Unassigned',
-      t.title,
-      formatDate(t.deadline),
-      meta.label,
-      formatDate(t.created_at),
-      t.completed_at ? formatDate(t.completed_at) : '—'
-    ];
-  });
+    doc.setFontSize(16);
+    const pdfTitle = typeof BRAND !== 'undefined' ? `${BRAND.APP_NAME} — Task Report` : 'Work Management — Task Report';
+    doc.text(pdfTitle, 14, 16);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated ${new Date().toLocaleString()}`, 14, 22);
 
-  doc.autoTable({
-    head: [['Employee', 'Task', 'Deadline', 'Status', 'Assigned On', 'Completed On']],
-    body: rows,
-    startY: 28,
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [27, 30, 35] }
-  });
+    const rows = allTasksCache.map(t => {
+      const meta = statusMeta(t);
+      const isComplete = t.status === 'complete' && t.completed_at;
+      return [
+        t.employee?.full_name || 'Unassigned',
+        t.title,
+        formatDate(t.deadline),
+        meta.label,
+        formatDate(t.created_at),
+        isComplete ? formatDateTime(t.completed_at) : '-'
+      ];
+    });
 
-  doc.save(`work-order-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.autoTable({
+      head: [['Employee', 'Task', 'Deadline', 'Status', 'Assigned', 'Completed']],
+      body: rows,
+      startY: 28,
+      styles: { fontSize: 8.5 },
+      headStyles: { fillColor: [27, 30, 35] }
+    });
+
+    const fileName = `work-order-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    // On Capacitor native Android, normal browser blob downloads don't trigger in WebView
+    if (isNativeApp()) {
+      try {
+        const Filesystem = getCapacitorPlugin('Filesystem');
+        const Share = getCapacitorPlugin('Share');
+
+        if (!Filesystem || typeof Filesystem.writeFile !== 'function') {
+          throw new Error('Filesystem plugin is unavailable on this device');
+        }
+
+        const pdfBase64 = doc.output('datauristring').split(',')[1];
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: pdfBase64,
+          directory: 'CACHE',
+          recursive: true
+        });
+
+        if (Share && typeof Share.share === 'function') {
+          await Share.share({
+            title: pdfTitle,
+            text: `Task report generated on ${new Date().toLocaleDateString()}`,
+            url: savedFile.uri,
+            dialogTitle: 'Save or Share PDF Report'
+          });
+        } else {
+          alert(`PDF saved successfully to cache: ${fileName}`);
+        }
+      } catch (nativeErr) {
+        const msg = nativeErr?.message || String(nativeErr);
+        if (msg.includes('canceled') || msg.includes('cancelled')) {
+          console.log('Share dismissed by user');
+        } else {
+          console.error('Native PDF export error:', nativeErr);
+          alert('Native PDF export error: ' + msg + '\nAttempting browser download fallback...');
+          doc.save(fileName);
+        }
+      }
+    } else {
+      doc.save(fileName);
+    }
+  } catch (err) {
+    console.error('PDF export error:', err);
+    alert('Could not export PDF: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 });
 
 // =========================================================
@@ -701,6 +985,8 @@ async function loadEmployeeData() {
   await loadMyFiles();
   await checkDeadlineNotifications();
   await loadNotifications();
+  loadRecentActivityFeed();
+  if (currentAppPage === 'calendar') renderCalendarPage();
 }
 
 function renderEmployeeStatCards() {
@@ -744,7 +1030,8 @@ function renderEmployeeStatCards() {
   $('es-deadlines').textContent = dueToday + dueThisWeek;
   $('es-deadlines-today').textContent = dueToday;
   $('es-deadlines-week').textContent = dueThisWeek;
-  $('es-deadlines-sub').textContent = `${dueToday} Today · ${dueThisWeek} This Week`;
+  const dlSub = $('es-deadlines-sub');
+  if (dlSub) dlSub.textContent = `${dueToday} Today · ${dueThisWeek} This Week`;
 }
 
 function openFullTasksModal(employeeId, employeeName) {
@@ -760,8 +1047,8 @@ function openFullTasksModal(employeeId, employeeName) {
   } else {
     listEl.innerHTML = tasks.map(t => {
       const meta = statusMeta(t);
-      const metaText = t.status === 'complete'
-        ? `Completed ${formatDate(t.completed_at)}`
+      const metaText = t.status === 'complete' && t.completed_at
+        ? `Completed ${formatDateTime(t.completed_at)}`
         : `Due ${formatDate(t.deadline)}`;
       return `
         <div class="full-task-row ${meta.cls}">
@@ -1096,17 +1383,122 @@ function renderMyTickets(tasks, targetId = 'my-tickets', inline = false) {
 // Inline task detail panel (dedicated sidebar Work Inbox page)
 // =========================================================
 let inlineDetailTaskId = null;
+let currentDetailTaskId = null;
+let currentDetailOptions = null;
 
-async function openInlineTaskDetail(taskId) {
-  const t = allTasksCache.find(x => x.id === taskId);
-  if (!t) return;
+function openInlineTaskDetail(taskId) {
+  return openTaskDetail(taskId, { source: 'inbox' });
+}
 
+function openFullscreenDetailPanel() {
+  const panel = $('inbox-detail-panel');
+  if (!panel) return;
+  if (panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+  }
+  panel.classList.add('task-detail-fullscreen');
+  panel.scrollTop = 0;
+
+  const backBtn = $('idc-back-btn');
+  if (backBtn) backBtn.onclick = () => closeTaskDetailFullscreen();
+  const emptyBackBtn = $('idc-empty-back-btn');
+  if (emptyBackBtn) emptyBackBtn.onclick = () => closeTaskDetailFullscreen();
+}
+
+function closeTaskDetailFullscreen() {
+  const panel = $('inbox-detail-panel');
+  if (!panel || !panel.classList.contains('task-detail-fullscreen')) return;
+
+  panel.classList.remove('task-detail-fullscreen');
+  const inboxSplit = document.querySelector('.inbox-split');
+  if (inboxSplit && panel.parentElement !== inboxSplit) {
+    inboxSplit.appendChild(panel);
+  }
+
+  // Refresh calendar or activity views when returning
+  if (currentAppPage === 'calendar') {
+    renderCalendarGrid();
+    renderCalendarSelectedDay();
+  } else if (currentAppPage === 'activity') {
+    loadRecentActivityFeed();
+  }
+}
+
+async function refreshAfterTaskAction() {
+  if (currentProfile?.role === 'boss') {
+    await loadTasks();
+  } else {
+    await loadEmployeeData();
+  }
+  renderCalendarGrid();
+  renderCalendarSelectedDay();
+  loadRecentActivityFeed();
+}
+
+async function openTaskDetail(taskId, options = {}) {
+  currentDetailTaskId = taskId;
+  currentDetailOptions = options;
   inlineDetailTaskId = taskId;
-  $('idc-empty').classList.add('hidden');
-  $('idc-content').classList.remove('hidden');
+
+  const isMobile = window.innerWidth <= 900;
+  const panel = $('inbox-detail-panel');
+  if (!panel) return;
+  const isBoss = currentProfile?.role === 'boss';
+
+  // 1. Fetch task from cache or database fallback
+  let t = allTasksCache.find(x => x.id === taskId);
+  if (!t) {
+    $('idc-empty')?.classList.add('hidden');
+    $('idc-content')?.classList.remove('hidden');
+    $('idc-title').textContent = 'Loading task...';
+
+    const { data, error } = await sb
+      .from('tasks')
+      .select('*, employee:profiles!tasks_assigned_to_fkey(full_name)')
+      .eq('id', taskId)
+      .single();
+
+    if (error || !data) {
+      const emptyText = $('idc-empty-text');
+      if (emptyText) emptyText.textContent = 'This task is no longer available or you do not have permission to view it.';
+      $('idc-empty-back-wrap')?.classList.remove('hidden');
+      $('idc-empty')?.classList.remove('hidden');
+      $('idc-content')?.classList.add('hidden');
+      if (isMobile && options.source && options.source !== 'inbox') {
+        openFullscreenDetailPanel();
+      }
+      return;
+    }
+    t = data;
+  }
+
+  // 2. Display mode: mobile full-screen view vs desktop Work Inbox panel
+  if (isMobile) {
+    if (options.source && options.source !== 'inbox') {
+      openFullscreenDetailPanel();
+    } else {
+      document.querySelector('.inbox-split')?.classList.add('detail-active');
+      const backBtn = $('idc-back-btn');
+      if (backBtn) {
+        backBtn.onclick = () => document.querySelector('.inbox-split')?.classList.remove('detail-active');
+      }
+    }
+  } else {
+    if (isBoss) {
+      inboxScopeSide = 'everyone';
+      document.querySelectorAll('[data-scope-side]').forEach(b => b.classList.toggle('active', b.dataset.scopeSide === 'everyone'));
+      await renderWorkInbox();
+    }
+    showPage('inbox');
+  }
+
+  // 3. Populate task details
+  $('idc-empty-back-wrap')?.classList.add('hidden');
+  $('idc-empty')?.classList.add('hidden');
+  $('idc-content')?.classList.remove('hidden');
 
   const meta = statusMeta(t);
-  const isMine = t.assigned_to === currentUser.id;
+  const isMine = t.assigned_to === currentUser?.id;
   const dl = daysLeftInfo(t);
   const counts = ticketCommentCounts[t.id] || { comments: 0, files: 0 };
 
@@ -1121,20 +1513,39 @@ async function openInlineTaskDetail(taskId) {
   $('idc-assigned-by').textContent = cachedBossName || 'Boss';
   $('idc-assigned-to').textContent = t.employee?.full_name || (isMine ? currentProfile.full_name : '—');
   $('idc-description').textContent = t.description || '—';
+
+  const completedBox = $('idc-completed-box');
+  const completedAtEl = $('idc-completed-at');
+  if (completedBox && completedAtEl) {
+    if (t.status === 'complete' && t.completed_at) {
+      completedBox.classList.remove('hidden');
+      completedAtEl.textContent = formatDateTime(t.completed_at);
+    } else {
+      completedBox.classList.add('hidden');
+      completedAtEl.textContent = '';
+    }
+  }
+
   $('idc-files-count').textContent = `📎 ${counts.files} File${counts.files === 1 ? '' : 's'}`;
   $('idc-comments-count').textContent = `💬 ${counts.comments} Comment${counts.comments === 1 ? '' : 's'}`;
 
+  // 4. Role action buttons (Employee and Boss)
   let actionsHtml = '';
   if (isMine) {
     if (t.status === 'assigned') {
       actionsHtml = `
-        <button class="btn-primary" id="idc-accept-btn">✅ Accept</button>
-        <button class="btn-secondary-small" id="idc-reassign-btn">Not related to me</button>`;
+        <button type="button" class="btn-primary" id="idc-accept-btn">✅ Accept</button>
+        <button type="button" class="btn-secondary-small" id="idc-reassign-btn">Not related to me</button>`;
     } else if (t.status === 'accepted') {
-      actionsHtml = `<button class="btn-primary" id="idc-start-btn">▶️ Start work</button>`;
+      actionsHtml = `<button type="button" class="btn-primary" id="idc-start-btn">▶️ Start work</button>`;
     } else if (t.status === 'in_progress') {
-      actionsHtml = `<button class="btn-primary" id="idc-complete-btn">✔️ Mark complete</button>`;
+      actionsHtml = `<button type="button" class="btn-primary" id="idc-complete-btn">✔️ Mark complete</button>`;
     }
+  } else if (isBoss) {
+    actionsHtml = `
+      <button type="button" class="btn-secondary" id="idc-boss-reassign-btn">🔄 Reassign</button>
+      <button type="button" class="btn-danger-text action-btn" id="idc-boss-delete-btn" style="border:1px solid rgba(239,68,68,0.25);padding:8px 14px;border-radius:8px;">🗑️ Delete task</button>
+    `;
   }
   $('idc-actions').innerHTML = actionsHtml;
 
@@ -1142,38 +1553,59 @@ async function openInlineTaskDetail(taskId) {
   if (acceptBtn) acceptBtn.addEventListener('click', async () => {
     acceptBtn.disabled = true; acceptBtn.textContent = 'Accepting...';
     const { error } = await sb.from('tasks').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', taskId).eq('assigned_to', currentUser.id);
-    if (error) { alert('Could not update task: ' + error.message); return; }
+    if (error) { alert('Could not update task: ' + error.message); acceptBtn.disabled = false; acceptBtn.textContent = '✅ Accept'; return; }
     await sb.from('task_events').insert({ task_id: taskId, event_type: 'accepted', actor: currentUser.id });
     await notifyBoss('task_accepted', 'Task accepted', `${currentProfile.full_name} accepted the task: "${t.title}"`, taskId);
-    await loadEmployeeData();
-    openInlineTaskDetail(taskId);
+    await refreshAfterTaskAction();
+    await openTaskDetail(taskId, options);
   });
+
   const startBtn = $('idc-start-btn');
   if (startBtn) startBtn.addEventListener('click', async () => {
     startBtn.disabled = true; startBtn.textContent = 'Starting...';
     const { error } = await sb.from('tasks').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', taskId).eq('assigned_to', currentUser.id);
-    if (error) { alert('Could not update task: ' + error.message); return; }
+    if (error) { alert('Could not update task: ' + error.message); startBtn.disabled = false; startBtn.textContent = '▶️ Start work'; return; }
     await sb.from('task_events').insert({ task_id: taskId, event_type: 'started', actor: currentUser.id });
     await notifyBoss('task_started', 'Work started', `${currentProfile.full_name} started work on: "${t.title}"`, taskId);
-    await loadEmployeeData();
-    openInlineTaskDetail(taskId);
+    await refreshAfterTaskAction();
+    await openTaskDetail(taskId, options);
   });
+
   const completeBtn = $('idc-complete-btn');
   if (completeBtn) completeBtn.addEventListener('click', async () => {
     completeBtn.disabled = true; completeBtn.textContent = 'Saving...';
     const { error } = await sb.from('tasks').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', taskId).eq('assigned_to', currentUser.id);
-    if (error) { alert('Could not update task: ' + error.message); return; }
+    if (error) { alert('Could not update task: ' + error.message); completeBtn.disabled = false; completeBtn.textContent = '✔️ Mark complete'; return; }
     await sb.from('task_events').insert({ task_id: taskId, event_type: 'completed', actor: currentUser.id });
     await notifyBoss('task_completed', 'Task completed', `${currentProfile.full_name} completed: "${t.title}"`, taskId);
-    await loadEmployeeData();
-    openInlineTaskDetail(taskId);
+    await refreshAfterTaskAction();
+    await openTaskDetail(taskId, options);
   });
-  const reassignBtn = $('idc-reassign-btn');
-  if (reassignBtn) reassignBtn.addEventListener('click', () => openReassignModal(taskId));
+
+  $('idc-reassign-btn')?.addEventListener('click', () => openReassignModal(taskId));
+  $('idc-boss-reassign-btn')?.addEventListener('click', () => openReassignModal(taskId));
+
+  const deleteBtn = $('idc-boss-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
+    const ok = confirm(`Delete "${t.title}"? This permanently removes the task and its history. This cannot be undone.`);
+    if (!ok) return;
+    deleteBtn.disabled = true;
+    const { error } = await sb.from('tasks').delete().eq('id', taskId);
+    if (error) { alert('Could not delete task: ' + error.message); deleteBtn.disabled = false; return; }
+    await refreshAfterTaskAction();
+    if (panel.classList.contains('task-detail-fullscreen')) {
+      closeTaskDetailFullscreen();
+    } else {
+      $('idc-content').classList.add('hidden');
+      const emptyText = $('idc-empty-text');
+      if (emptyText) emptyText.textContent = 'Task has been deleted.';
+      $('idc-empty').classList.remove('hidden');
+    }
+  });
 
   $('idc-history-btn').onclick = () => openHistoryModal(taskId, t.title);
 
-  // comments + history auto-load, visible without an extra click
+  // 5. Comments and History load automatically
   await loadComments(taskId, 'idc-comments-list');
   await loadHistoryInto(taskId, 'idc-history-list');
 }
@@ -1193,7 +1625,7 @@ $('idc-comment-send').addEventListener('click', async () => {
   msg.className = 'msg';
 
   const message = $('idc-comment-message').value.trim();
-  const file = $('idc-comment-file').files[0];
+  const file = window.idcPendingCommentFile || $('idc-comment-file').files[0];
   if (!message && !file) {
     msg.textContent = 'Write something or attach a file first.';
     msg.className = 'msg err';
@@ -1222,7 +1654,8 @@ $('idc-comment-send').addEventListener('click', async () => {
     message: message || null,
     attachment_url: attachment?.url || null,
     attachment_name: attachment?.name || null,
-    attachment_type: attachment?.type || null
+    attachment_type: attachment?.type || null,
+    attachment_size: attachment?.size || 0
   });
 
   sendBtn.disabled = false;
@@ -1236,6 +1669,7 @@ $('idc-comment-send').addEventListener('click', async () => {
 
   $('idc-comment-message').value = '';
   $('idc-comment-file').value = '';
+  window.idcPendingCommentFile = null;
   await loadComments(inlineDetailTaskId, 'idc-comments-list');
 
   const t = allTasksCache.find(x => x.id === inlineDetailTaskId);
@@ -1251,8 +1685,13 @@ $('idc-comment-send').addEventListener('click', async () => {
 function openReassignModal(taskId) {
   const select = $('reassign-employee');
   select.innerHTML = '';
-  employeeDirectoryCache
-    .filter(e => e.id !== currentUser.id)
+  const isBoss = currentProfile?.role === 'boss';
+  const task = allTasksCache.find(x => x.id === taskId);
+  const currentAssigned = task ? task.assigned_to : (isBoss ? null : currentUser.id);
+
+  const empList = (employeesCache && employeesCache.length > 0) ? employeesCache : employeeDirectoryCache;
+  (empList || [])
+    .filter(e => e.id !== currentAssigned)
     .forEach(e => {
       select.innerHTML += `<option value="${e.id}">${escapeHtml(e.full_name)}</option>`;
     });
@@ -1280,11 +1719,16 @@ $('reassign-form').addEventListener('submit', async (e) => {
     return;
   }
 
-  const { error } = await sb
-    .from('tasks')
-    .update({ assigned_to: newAssignee })
-    .eq('id', taskId)
-    .eq('assigned_to', currentUser.id);
+  const isBoss = currentProfile?.role === 'boss';
+  const taskBefore = allTasksCache.find(x => x.id === taskId);
+  const fromEmp = taskBefore ? taskBefore.assigned_to : currentUser.id;
+
+  let query = sb.from('tasks').update({ assigned_to: newAssignee }).eq('id', taskId);
+  if (!isBoss) {
+    query = query.eq('assigned_to', currentUser.id);
+  }
+
+  const { error } = await query;
 
   if (error) {
     msg.textContent = error.message;
@@ -1295,38 +1739,169 @@ $('reassign-form').addEventListener('submit', async (e) => {
   await sb.from('task_events').insert({
     task_id: taskId,
     event_type: 'reassigned',
-    from_employee: currentUser.id,
+    from_employee: fromEmp,
     to_employee: newAssignee,
     actor: currentUser.id
   });
 
   $('reassign-modal').classList.add('hidden');
-  await loadEmployeeData();
+  await refreshAfterTaskAction();
+  if (currentDetailTaskId === taskId) {
+    await openTaskDetail(taskId, currentDetailOptions || {});
+  }
 });
 
 // =========================================================
 // Change password (both roles)
 // =========================================================
-$('change-pw-btn').addEventListener('click', () => {
-  $('pw-msg').textContent = '';
-  $('change-pw-form').reset();
-  $('change-pw-modal').classList.remove('hidden');
-});
-$('pw-cancel').addEventListener('click', () => $('change-pw-modal').classList.add('hidden'));
+function resetPasswordForm() {
+  $('change-pw-form')?.reset();
+  ['current-password', 'new-password', 'confirm-new-password'].forEach(id => {
+    const input = $(id);
+    if (input) input.type = 'password';
+  });
+  document.querySelectorAll('#change-pw-form .pw-toggle-btn').forEach(btn => {
+    btn.textContent = '👁️';
+  });
+  const msg = $('pw-msg');
+  if (msg) {
+    msg.textContent = '';
+    msg.className = 'msg';
+  }
+}
 
-$('change-pw-form').addEventListener('submit', async (e) => {
+function openChangePasswordModal() {
+  resetPasswordForm();
+  const hiddenUser = $('pw-username-hidden');
+  if (hiddenUser && currentUser?.email) {
+    hiddenUser.value = currentUser.email;
+  }
+  const modal = $('change-pw-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+// Wire password visibility toggles
+document.querySelectorAll('#change-pw-form .pw-toggle-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const targetId = btn.dataset.target;
+    const input = $(targetId);
+    if (!input) return;
+    const isPw = input.type === 'password';
+    input.type = isPw ? 'text' : 'password';
+    btn.textContent = isPw ? '🙈' : '👁️';
+  });
+});
+
+$('change-pw-btn')?.addEventListener('click', openChangePasswordModal);
+$('pw-cancel')?.addEventListener('click', () => {
+  resetPasswordForm();
+  $('change-pw-modal')?.classList.add('hidden');
+});
+
+$('change-pw-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = $('pw-msg');
+  msg.textContent = '';
+  msg.className = 'msg';
+
+  const currentPassword = $('current-password').value;
   const newPassword = $('new-password').value;
-  const { error } = await sb.auth.updateUser({ password: newPassword });
-  if (error) {
-    msg.textContent = error.message;
+  const confirmPassword = $('confirm-new-password').value;
+
+  // Validation
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    msg.textContent = 'All fields are required.';
     msg.className = 'msg err';
     return;
   }
-  msg.textContent = 'Password updated.';
-  msg.className = 'msg ok';
-  setTimeout(() => $('change-pw-modal').classList.add('hidden'), 800);
+  if (newPassword.length < 8) {
+    msg.textContent = 'New password must be at least 8 characters.';
+    msg.className = 'msg err';
+    return;
+  }
+  if (newPassword === currentPassword) {
+    msg.textContent = 'New password must be different from current password.';
+    msg.className = 'msg err';
+    return;
+  }
+  if (confirmPassword !== newPassword) {
+    msg.textContent = 'New passwords do not match.';
+    msg.className = 'msg err';
+    return;
+  }
+
+  const submitBtn = $('pw-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Verifying...';
+
+  try {
+    // Step 1: Verify current password via secondary client (sbAdmin)
+    const { error: verifyError } = await sbAdmin.auth.signInWithPassword({
+      email: currentUser.email,
+      password: currentPassword
+    });
+
+    if (verifyError) {
+      const errMsg = (verifyError.message || '').toLowerCase();
+      if (errMsg.includes('invalid login credentials') || errMsg.includes('invalid credentials')) {
+        msg.textContent = 'Current password is incorrect.';
+      } else if (errMsg.includes('rate limit') || errMsg.includes('too many requests')) {
+        msg.textContent = 'Too many attempts. Please wait a moment and try again.';
+      } else if (errMsg.includes('network') || errMsg.includes('failed to fetch')) {
+        msg.textContent = 'Network error. Please check your connection and try again.';
+      } else {
+        msg.textContent = verifyError.message || 'Current password verification failed.';
+      }
+      msg.className = 'msg err';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Update password';
+      return;
+    }
+
+    // Step 2: Update password on main client
+    submitBtn.textContent = 'Updating...';
+    const { error: updateError } = await sb.auth.updateUser({ password: newPassword });
+
+    // Sign out temporary session on sbAdmin
+    try {
+      await sbAdmin.auth.signOut();
+    } catch (err) {
+      console.warn('sbAdmin signOut error:', err);
+    }
+
+    if (updateError) {
+      msg.textContent = updateError.message || 'Could not update password.';
+      msg.className = 'msg err';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Update password';
+      return;
+    }
+
+    // Success!
+    msg.textContent = 'Password updated successfully.';
+    msg.className = 'msg ok';
+
+    setTimeout(() => {
+      resetPasswordForm();
+      $('change-pw-modal')?.classList.add('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Update password';
+
+      // Show toast
+      const toast = document.createElement('div');
+      toast.textContent = 'Password changed successfully';
+      toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(16,185,129,0.95);color:#fff;padding:10px 20px;border-radius:24px;font-size:14px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.3);pointer-events:none;';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }, 800);
+
+  } catch (err) {
+    msg.textContent = err.message || 'An unexpected error occurred.';
+    msg.className = 'msg err';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Update password';
+  }
 });
 
 $('history-close').addEventListener('click', () => $('history-modal').classList.add('hidden'));
@@ -1422,8 +1997,16 @@ function hashId(str) {
   return h;
 }
 
-// subtle 3D tilt-on-hover for the ID cards
+// subtle 3D tilt-on-hover for the ID cards (disabled on touch devices)
 function attachCardTilt(card) {
+  // If touch device or no hover pointer, skip 3D tilt
+  if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+    return;
+  }
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    return;
+  }
+
   const maxTilt = 8;
   card.addEventListener('mousemove', (e) => {
     const rect = card.getBoundingClientRect();
@@ -1521,6 +2104,18 @@ function formatDate(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function formatDateTime(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 }
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -1917,29 +2512,106 @@ function renderDailyQuote() {
 }
 
 // =========================================================
-// FILE UPLOAD HELPER (shared by comments + My Files)
+// FILE UPLOAD HELPER, COMPRESSION & STORAGE LIMITS (Phase C)
 // =========================================================
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_PDF_BYTES = 5 * 1024 * 1024; // 5 MB max for PDFs
+const EMPLOYEE_STORAGE_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB total limit per employee
+const TOTAL_STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB total bucket plan limit
 
 function classifyFile(file) {
-  if (file.type.startsWith('image/')) return 'image';
-  if (file.type === 'application/pdf') return 'pdf';
+  if (!file) return null;
+  const mime = file.type || '';
+  const name = (file.name || '').toLowerCase();
+  if (mime.startsWith('image/') || name.match(/\.(jpg|jpeg|png|webp|gif)$/)) return 'image';
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
   return null;
 }
 
-async function uploadFileToStorage(file, pathPrefix) {
-  const kind = classifyFile(file);
-  if (!kind) {
-    throw new Error('Only images or PDF files are supported.');
+function formatBytes(bytes) {
+  if (bytes === null || bytes === undefined || isNaN(bytes)) return '0 B';
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Compress an image File/Blob using Canvas (max ~1600px on long edge, JPEG quality ~0.7)
+async function compressImage(file, maxDimension = 1600, quality = 0.7) {
+  return new Promise((resolve) => {
+    // If not an image or SVG/GIF (which we shouldn't rasterize to JPEG), return original
+    if (!file.type.startsWith('image/') || file.type.includes('svg') || file.type.includes('gif')) {
+      return resolve(file);
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => resolve(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => resolve(file);
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(file);
+          // If compressed is somehow larger than original, keep original
+          if (blob.size >= file.size) return resolve(file);
+          const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+          const compressedFile = new File([blob], newName, { type: 'image/jpeg', lastModified: Date.now() });
+          resolve(compressedFile);
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Extracts the relative storage object path from a public Supabase URL
+function getStoragePathFromUrl(fileUrl) {
+  if (!fileUrl) return null;
+  const marker = '/attachments/';
+  const idx = fileUrl.indexOf(marker);
+  if (idx !== -1) {
+    return decodeURIComponent(fileUrl.substring(idx + marker.length));
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error('That file is too large — please keep it under 8 MB.');
+  return null;
+}
+
+async function uploadFileToStorage(rawFile, pathPrefix) {
+  const kind = classifyFile(rawFile);
+  if (!kind) {
+    throw new Error('Only image files (JPEG, PNG) or PDF documents are supported.');
   }
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  let fileToUpload = rawFile;
+  if (kind === 'image') {
+    fileToUpload = await compressImage(rawFile);
+  } else if (kind === 'pdf') {
+    if (fileToUpload.size > MAX_PDF_BYTES) {
+      throw new Error(`PDF is too large (${formatBytes(fileToUpload.size)}). Maximum allowed size is 5 MB.`);
+    }
+  }
+
+  const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `${pathPrefix}/${crypto.randomUUID()}-${safeName}`;
 
-  const { error: uploadError } = await sb.storage.from('attachments').upload(path, file, {
+  const { error: uploadError } = await sb.storage.from('attachments').upload(path, fileToUpload, {
     cacheControl: '3600',
     upsert: false
   });
@@ -1947,7 +2619,215 @@ async function uploadFileToStorage(file, pathPrefix) {
 
   const { data: pub } = sb.storage.from('attachments').getPublicUrl(path);
 
-  return { url: pub.publicUrl, name: file.name, type: kind, path };
+  return {
+    url: pub.publicUrl,
+    name: fileToUpload.name,
+    type: kind,
+    path,
+    size: fileToUpload.size
+  };
+}
+
+// Native File Picker Controller (Camera / Gallery / Document Picker)
+let activePickerCallback = null;
+
+function openNativeFilePicker(callback) {
+  activePickerCallback = callback;
+  const modal = $('file-picker-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeNativeFilePicker() {
+  const modal = $('file-picker-modal');
+  if (modal) modal.classList.add('hidden');
+  activePickerCallback = null;
+}
+
+function dataUrlToBlob(dataUrl) {
+  try {
+    const parts = dataUrl.split(',');
+    const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch (err) {
+    console.error('dataUrlToBlob conversion failed:', err);
+    return null;
+  }
+}
+
+function triggerFallbackFileInput(accept, capture, cb) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept || '*/*';
+  if (capture) {
+    input.capture = capture;
+  }
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.onchange = () => {
+    if (input.files && input.files[0] && cb) {
+      cb(input.files[0]);
+    }
+    input.remove();
+  };
+  input.click();
+}
+
+$('picker-opt-cancel')?.addEventListener('click', closeNativeFilePicker);
+
+// 1. Camera Option
+$('picker-opt-camera')?.addEventListener('click', async () => {
+  const cb = activePickerCallback;
+  closeNativeFilePicker();
+
+  const Camera = isNativeApp() ? getCapacitorPlugin('Camera') : null;
+  if (Camera && typeof Camera.getPhoto === 'function') {
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 80,
+        allowEditing: false,
+        resultType: 'dataUrl',
+        source: 'CAMERA'
+      });
+
+      let blob = null;
+      if (photo.dataUrl) {
+        blob = dataUrlToBlob(photo.dataUrl);
+      } else if (photo.webPath) {
+        const response = await fetch(photo.webPath);
+        blob = await response.blob();
+      }
+
+      if (blob) {
+        const ext = photo.format || 'jpg';
+        const file = new File([blob], `photo_${Date.now()}.${ext}`, { type: blob.type || `image/${ext}` });
+        if (cb) cb(file);
+      } else {
+        throw new Error('No photo data received from camera');
+      }
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (msg.includes('User cancelled') || msg.includes('canceled') || msg.includes('cancelled')) {
+        console.log('Camera capture cancelled by user');
+        return;
+      }
+      console.error('Camera plugin error:', e);
+      alert('Camera error: ' + msg + '\nOpening camera / file picker fallback...');
+      triggerFallbackFileInput('image/*', 'environment', cb);
+    }
+  } else {
+    // Non-native browser or Camera plugin unavailable
+    triggerFallbackFileInput('image/*', 'environment', cb);
+  }
+});
+
+// 2. Gallery Option
+$('picker-opt-gallery')?.addEventListener('click', async () => {
+  const cb = activePickerCallback;
+  closeNativeFilePicker();
+
+  const Camera = isNativeApp() ? getCapacitorPlugin('Camera') : null;
+  if (Camera && typeof Camera.getPhoto === 'function') {
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 85,
+        allowEditing: false,
+        resultType: 'dataUrl',
+        source: 'PHOTOS'
+      });
+
+      let blob = null;
+      if (photo.dataUrl) {
+        blob = dataUrlToBlob(photo.dataUrl);
+      } else if (photo.webPath) {
+        const response = await fetch(photo.webPath);
+        blob = await response.blob();
+      }
+
+      if (blob) {
+        const ext = photo.format || 'jpg';
+        const file = new File([blob], `gallery_${Date.now()}.${ext}`, { type: blob.type || `image/${ext}` });
+        if (cb) cb(file);
+      } else {
+        throw new Error('No image data received from photo library');
+      }
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (msg.includes('User cancelled') || msg.includes('canceled') || msg.includes('cancelled')) {
+        console.log('Gallery selection cancelled by user');
+        return;
+      }
+      console.error('Gallery plugin error:', e);
+      alert('Gallery error: ' + msg + '\nOpening photo picker fallback...');
+      triggerFallbackFileInput('image/*', null, cb);
+    }
+  } else {
+    triggerFallbackFileInput('image/*', null, cb);
+  }
+});
+
+// 3. Document / PDF Option
+$('picker-opt-doc')?.addEventListener('click', () => {
+  const cb = activePickerCallback;
+  closeNativeFilePicker();
+  triggerFallbackFileInput('application/pdf,image/*', null, cb);
+});
+
+
+// Wire file picker trigger in My Files
+let myFilesPendingFile = null;
+const myFilePickBtn = $('my-file-pick-btn');
+if (myFilePickBtn) {
+  myFilePickBtn.addEventListener('click', () => {
+    openNativeFilePicker((file) => {
+      myFilesPendingFile = file;
+      const label = $('my-file-picked-name');
+      if (label) {
+        label.textContent = `${file.name} (${formatBytes(file.size)})`;
+        label.style.color = 'var(--ink)';
+      }
+    });
+  });
+}
+
+// Wire comment attachment triggers to native picker
+const idcAttachBtn = document.querySelector('.idc-attach-btn');
+if (idcAttachBtn) {
+  idcAttachBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    openNativeFilePicker((file) => {
+      window.idcPendingCommentFile = file;
+      const msg = $('idc-comment-msg');
+      if (msg) {
+        msg.textContent = `Attached: ${file.name} (${formatBytes(file.size)})`;
+        msg.className = 'msg ok';
+      }
+    });
+  });
+}
+
+const modalAttachBtn = document.querySelector('.comment-attach-btn');
+if (modalAttachBtn) {
+  modalAttachBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    openNativeFilePicker((file) => {
+      pendingCommentAttachment = file;
+      const preview = $('comment-attachment-preview');
+      const kind = classifyFile(file);
+      preview.classList.remove('hidden');
+      preview.innerHTML = `${kind === 'image' ? '🖼️' : '📄'} ${escapeHtml(file.name)} (${formatBytes(file.size)}) <button type="button" class="btn-text-small" id="comment-attachment-remove">Remove</button>`;
+      $('comment-attachment-remove')?.addEventListener('click', () => {
+        pendingCommentAttachment = null;
+        preview.classList.add('hidden');
+        preview.innerHTML = '';
+      });
+    });
+  });
 }
 
 // =========================================================
@@ -2002,10 +2882,11 @@ async function loadComments(taskId, listId = 'comments-list') {
     });
     let attachmentHtml = '';
     if (c.attachment_url) {
+      const sizeTag = c.attachment_size ? ` · ${formatBytes(c.attachment_size)}` : '';
       if (c.attachment_type === 'image') {
         attachmentHtml = `<a href="${c.attachment_url}" target="_blank" rel="noopener"><img src="${c.attachment_url}" class="comment-attachment-img" alt="${escapeHtml(c.attachment_name || 'attachment')}"></a>`;
       } else {
-        attachmentHtml = `<a href="${c.attachment_url}" target="_blank" rel="noopener" class="comment-attachment-file">📄 ${escapeHtml(c.attachment_name || 'file.pdf')}</a>`;
+        attachmentHtml = `<a href="${c.attachment_url}" target="_blank" rel="noopener" class="comment-attachment-file">📄 ${escapeHtml(c.attachment_name || 'file.pdf')}${sizeTag}</a>`;
       }
     }
     return `
@@ -2020,7 +2901,7 @@ async function loadComments(taskId, listId = 'comments-list') {
   list.scrollTop = list.scrollHeight;
 }
 
-$('comment-file').addEventListener('change', () => {
+$('comment-file')?.addEventListener('change', () => {
   const file = $('comment-file').files[0];
   const preview = $('comment-attachment-preview');
   if (!file) {
@@ -2038,8 +2919,8 @@ $('comment-file').addEventListener('change', () => {
   }
   pendingCommentAttachment = file;
   preview.classList.remove('hidden');
-  preview.innerHTML = `${kind === 'image' ? '🖼️' : '📄'} ${escapeHtml(file.name)} <button type="button" class="btn-text-small" id="comment-attachment-remove">Remove</button>`;
-  $('comment-attachment-remove').addEventListener('click', () => {
+  preview.innerHTML = `${kind === 'image' ? '🖼️' : '📄'} ${escapeHtml(file.name)} (${formatBytes(file.size)}) <button type="button" class="btn-text-small" id="comment-attachment-remove">Remove</button>`;
+  $('comment-attachment-remove')?.addEventListener('click', () => {
     pendingCommentAttachment = null;
     $('comment-file').value = '';
     preview.classList.add('hidden');
@@ -2083,7 +2964,8 @@ $('comment-form').addEventListener('submit', async (e) => {
     message: message || null,
     attachment_url: attachment?.url || null,
     attachment_name: attachment?.name || null,
-    attachment_type: attachment?.type || null
+    attachment_type: attachment?.type || null,
+    attachment_size: attachment?.size || 0
   });
 
   sendBtn.disabled = false;
@@ -2096,7 +2978,7 @@ $('comment-form').addEventListener('submit', async (e) => {
   }
 
   $('comment-message').value = '';
-  $('comment-file').value = '';
+  if ($('comment-file')) $('comment-file').value = '';
   pendingCommentAttachment = null;
   $('comment-attachment-preview').classList.add('hidden');
   $('comment-attachment-preview').innerHTML = '';
@@ -2112,8 +2994,10 @@ $('comment-form').addEventListener('submit', async (e) => {
 });
 
 // =========================================================
-// MY FILES — employee's private upload locker
+// MY FILES — employee's private upload locker with 50 MB quota
 // =========================================================
+let myFilesTotalBytes = 0;
+
 async function loadMyFiles() {
   const grid = $('my-files-grid');
   if (!grid) return; // only exists on the employee dashboard
@@ -2132,31 +3016,57 @@ async function loadMyFiles() {
 
   $('my-files-count').textContent = data.length;
 
+  // Calculate total space used by this employee
+  myFilesTotalBytes = data.reduce((acc, f) => acc + (Number(f.file_size) || 0), 0);
+  const usedMb = (myFilesTotalBytes / (1024 * 1024)).toFixed(1);
+  const pct = Math.min(100, Math.round((myFilesTotalBytes / EMPLOYEE_STORAGE_LIMIT_BYTES) * 100));
+
+  const usedEl = $('my-storage-used-text');
+  const pctEl = $('my-storage-pct-text');
+  const fillEl = $('my-files-progress-fill');
+  if (usedEl) usedEl.textContent = `${usedMb} MB / 50.0 MB`;
+  if (pctEl) pctEl.textContent = `${pct}%`;
+  if (fillEl) {
+    fillEl.style.width = `${pct}%`;
+    fillEl.classList.toggle('full', pct >= 95);
+  }
+
   if (data.length === 0) {
     grid.innerHTML = '<p class="notice-empty">Nothing uploaded yet.</p>';
     return;
   }
 
-  grid.innerHTML = data.map(f => `
-    <div class="my-file-card">
-      ${f.file_type === 'image'
-        ? `<a href="${f.file_url}" target="_blank" rel="noopener"><img src="${f.file_url}" class="my-file-thumb" alt="${escapeHtml(f.file_name)}"></a>`
-        : `<a href="${f.file_url}" target="_blank" rel="noopener" class="my-file-icon">📄</a>`
-      }
-      <div class="my-file-info">
-        <div class="my-file-name" title="${escapeHtml(f.file_name)}">${escapeHtml(f.file_name)}</div>
-        ${f.note ? `<div class="my-file-note">${escapeHtml(f.note)}</div>` : ''}
-        <div class="my-file-date">${formatDate(f.created_at)}</div>
+  grid.innerHTML = data.map(f => {
+    const sizeStr = f.file_size ? formatBytes(f.file_size) : '';
+    return `
+      <div class="my-file-card">
+        ${f.file_type === 'image'
+          ? `<a href="${f.file_url}" target="_blank" rel="noopener"><img src="${f.file_url}" class="my-file-thumb" alt="${escapeHtml(f.file_name)}"></a>`
+          : `<a href="${f.file_url}" target="_blank" rel="noopener" class="my-file-icon">📄</a>`
+        }
+        <div class="my-file-info">
+          <div class="my-file-name" title="${escapeHtml(f.file_name)}">${escapeHtml(f.file_name)}</div>
+          ${f.note ? `<div class="my-file-note">${escapeHtml(f.note)}</div>` : ''}
+          <div class="my-file-date">${formatDate(f.created_at)}${sizeStr ? ` · ${sizeStr}` : ''}</div>
+        </div>
+        <button class="btn-text-small" data-delete-file="${f.id}" data-file-url="${escapeHtml(f.file_url)}" data-file-name="${escapeHtml(f.file_name)}">Delete</button>
       </div>
-      <button class="btn-text-small" data-delete-file="${f.id}" data-file-name="${escapeHtml(f.file_name)}">Delete</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   grid.querySelectorAll('button[data-delete-file]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const ok = confirm(`Delete "${btn.dataset.fileName}"? This can't be undone.`);
       if (!ok) return;
       btn.disabled = true;
+
+      // 1. Delete object from Supabase Storage
+      const storagePath = getStoragePathFromUrl(btn.dataset.fileUrl);
+      if (storagePath) {
+        await sb.storage.from('attachments').remove([storagePath]);
+      }
+
+      // 2. Delete database record
       const { error } = await sb.from('employee_files').delete().eq('id', btn.dataset.deleteFile);
       if (error) { alert('Could not delete: ' + error.message); btn.disabled = false; return; }
       await loadMyFiles();
@@ -2172,10 +3082,17 @@ if (myFileForm) {
     msg.textContent = '';
     msg.className = 'msg';
 
-    const file = $('my-file-input').files[0];
+    const file = myFilesPendingFile || ($('my-file-input') ? $('my-file-input').files[0] : null);
     const note = $('my-file-note').value.trim();
     if (!file) {
-      msg.textContent = 'Choose a file first.';
+      msg.textContent = 'Choose or capture a file first.';
+      msg.className = 'msg err';
+      return;
+    }
+
+    // Check if new file exceeds the 50 MB employee storage limit
+    if (myFilesTotalBytes + file.size > EMPLOYEE_STORAGE_LIMIT_BYTES) {
+      msg.textContent = `Upload rejected: this file would exceed your 50 MB storage limit. Currently used: ${(myFilesTotalBytes / (1024 * 1024)).toFixed(1)} MB.`;
       msg.className = 'msg err';
       return;
     }
@@ -2191,13 +3108,20 @@ if (myFileForm) {
         file_url: uploaded.url,
         file_name: uploaded.name,
         file_type: uploaded.type,
+        file_size: uploaded.size,
         note: note || null
       });
       if (error) throw error;
 
-      msg.textContent = 'Uploaded.';
+      msg.textContent = `Uploaded successfully (${formatBytes(uploaded.size)}).`;
       msg.className = 'msg ok';
       e.target.reset();
+      myFilesPendingFile = null;
+      const label = $('my-file-picked-name');
+      if (label) {
+        label.textContent = 'No file selected';
+        label.style.color = 'var(--slate)';
+      }
       await loadMyFiles();
     } catch (err) {
       msg.textContent = err.message;
@@ -2208,6 +3132,247 @@ if (myFileForm) {
     }
   });
 }
+
+// =========================================================
+// BOSS STORAGE MANAGEMENT (Phase C)
+// =========================================================
+let bossStorageFilesCache = [];
+
+async function loadBossStorageData() {
+  if (currentProfile?.role !== 'boss') return;
+  const tbody = $('storage-files-tbody');
+  const empGrid = $('storage-emp-list');
+  if (!tbody || !empGrid) return;
+
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--slate);">Loading storage data...</td></tr>';
+  empGrid.innerHTML = '<p class="notice-empty">Loading employee usage...</p>';
+
+  // Fetch all employee files (requires v10 migration RLS policy)
+  const { data: files, error } = await sb
+    .from('employee_files')
+    .select('*, employee:profiles!employee_files_employee_id_fkey(id, full_name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading boss storage data:', error);
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);">Could not load storage data: ${escapeHtml(error.message)} (run supabase-migration-v10.sql)</td></tr>`;
+    empGrid.innerHTML = '<p class="notice-empty">Could not load employee usage breakdown.</p>';
+    return;
+  }
+
+  bossStorageFilesCache = files || [];
+  renderBossStorageView();
+}
+
+function renderBossStorageView() {
+  const files = bossStorageFilesCache;
+  const totalBytes = files.reduce((acc, f) => acc + (Number(f.file_size) || 0), 0);
+  const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
+  const totalPct = Math.min(100, ((totalBytes / TOTAL_STORAGE_LIMIT_BYTES) * 100).toFixed(2));
+  const freeBytes = Math.max(0, TOTAL_STORAGE_LIMIT_BYTES - totalBytes);
+
+  // 1. Overall Progress Bar & Numbers
+  const totalTag = $('storage-total-tag');
+  const meterText = $('storage-meter-text');
+  const fillEl = $('storage-progress-fill');
+  const freeText = $('storage-free-text');
+
+  if (totalTag) totalTag.textContent = `${totalMb} MB / 1 GB`;
+  if (meterText) meterText.textContent = `${totalMb} MB of 1,024 MB (${totalPct}%)`;
+  if (fillEl) {
+    fillEl.style.width = `${Math.max(1, totalPct)}%`;
+    fillEl.classList.toggle('warning', totalPct >= 85);
+  }
+  if (freeText) freeText.textContent = `${formatBytes(freeBytes)} free`;
+
+  // 2. Per-Employee Usage Cards
+  const empGrid = $('storage-emp-list');
+  const filterSelect = $('storage-filter-emp');
+  const selectedFilter = filterSelect ? filterSelect.value : '';
+
+  // Aggregate files by employee
+  const usageByEmp = {}; // empId -> { id, name, count, bytes, files: [] }
+  employeesCache.forEach(emp => {
+    usageByEmp[emp.id] = { id: emp.id, name: emp.full_name, count: 0, bytes: 0, files: [] };
+  });
+
+  files.forEach(f => {
+    const empId = f.employee_id;
+    const empName = f.employee?.full_name || 'Unknown Employee';
+    if (!usageByEmp[empId]) {
+      usageByEmp[empId] = { id: empId, name: empName, count: 0, bytes: 0, files: [] };
+    }
+    const b = Number(f.file_size) || 0;
+    usageByEmp[empId].count++;
+    usageByEmp[empId].bytes += b;
+    usageByEmp[empId].files.push(f);
+  });
+
+  if (empGrid) {
+    const empList = Object.values(usageByEmp).sort((a, b) => b.bytes - a.bytes);
+    if (empList.length === 0) {
+      empGrid.innerHTML = '<p class="notice-empty">No employees found.</p>';
+    } else {
+      empGrid.innerHTML = empList.map(u => {
+        const empMb = (u.bytes / (1024 * 1024)).toFixed(1);
+        const empPct = Math.min(100, Math.round((u.bytes / EMPLOYEE_STORAGE_LIMIT_BYTES) * 100));
+        return `
+          <div class="storage-emp-card">
+            <div class="sec-head">
+              <span class="chip ${getAvatarColorClass(u.name)}">${getInitials(u.name)}</span>
+              <span class="sec-name" title="${escapeHtml(u.name)}">${escapeHtml(u.name)}</span>
+            </div>
+            <div class="sec-stats">
+              <span>${u.count} file${u.count === 1 ? '' : 's'}</span>
+              <span><strong>${empMb} MB</strong> / 50 MB (${empPct}%)</span>
+            </div>
+            <div class="my-files-progress-bar" style="margin:2px 0;">
+              <div class="my-files-progress-fill ${empPct >= 95 ? 'full' : ''}" style="width:${empPct}%;"></div>
+            </div>
+            <div class="sec-actions">
+              ${u.count > 0 ? `
+                <button type="button" class="btn-secondary-small btn-delete-all-emp" data-emp-id="${u.id}" data-emp-name="${escapeHtml(u.name)}" data-emp-count="${u.count}">
+                  🗑️ Delete all (${u.count})
+                </button>
+              ` : '<span style="font-size:11px;color:var(--slate);">No files stored</span>'}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Wire "Delete all files of this employee" buttons
+      empGrid.querySelectorAll('.btn-delete-all-emp').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const empId = btn.dataset.empId;
+          const empName = btn.dataset.empName;
+          const count = btn.dataset.empCount;
+          const confirmed = confirm(`Are you sure you want to permanently delete ALL ${count} files for ${empName}? This will remove them from Supabase Storage and database.`);
+          if (!confirmed) return;
+
+          btn.disabled = true;
+          btn.textContent = 'Deleting...';
+
+          try {
+            const empFiles = usageByEmp[empId]?.files || [];
+            const pathsToRemove = empFiles.map(f => getStoragePathFromUrl(f.file_url)).filter(Boolean);
+
+            // 1. Remove storage objects in batch
+            if (pathsToRemove.length > 0) {
+              await sb.storage.from('attachments').remove(pathsToRemove);
+            }
+
+            // 2. Remove database rows
+            const { error: delErr } = await sb.from('employee_files').delete().eq('employee_id', empId);
+            if (delErr) throw delErr;
+
+            alert(`Deleted all files for ${empName}.`);
+            await loadBossStorageData();
+          } catch (e) {
+            console.error('Delete all error:', e);
+            alert('Could not delete files: ' + e.message);
+            btn.disabled = false;
+            btn.textContent = `🗑️ Delete all (${count})`;
+          }
+        });
+      });
+    }
+  }
+
+  // Populate employee filter dropdown
+  if (filterSelect) {
+    const currentVal = filterSelect.value;
+    filterSelect.innerHTML = '<option value="">All employees</option>' + employeesCache.map(e => `
+      <option value="${e.id}" ${e.id === currentVal ? 'selected' : ''}>${escapeHtml(e.full_name)}</option>
+    `).join('');
+  }
+
+  // 3. Render Files Directory Table (metadata only, no preview / download)
+  renderBossStorageTable();
+}
+
+function renderBossStorageTable() {
+  const tbody = $('storage-files-tbody');
+  const filterSelect = $('storage-filter-emp');
+  const countTag = $('storage-files-count');
+  if (!tbody) return;
+
+  const selectedEmpId = filterSelect ? filterSelect.value : '';
+  let filtered = bossStorageFilesCache;
+  if (selectedEmpId) {
+    filtered = filtered.filter(f => f.employee_id === selectedEmpId);
+  }
+
+  if (countTag) countTag.textContent = `${filtered.length} file${filtered.length === 1 ? '' : 's'}`;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--slate);padding:24px;">No files found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(f => {
+    const empName = f.employee?.full_name || 'Unknown Employee';
+    const sizeStr = formatBytes(f.file_size || 0);
+    const dateStr = formatDate(f.created_at);
+    const icon = f.file_type === 'image' ? '🖼️' : '📄';
+    return `
+      <tr class="storage-row">
+        <td class="st-cell-file" data-label="File Name">
+          <span class="st-file-title" style="font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+            <span>${icon}</span>
+            <span>${escapeHtml(f.file_name)}</span>
+          </span>
+          ${f.note ? `<div class="st-file-note" style="font-size:11px;color:var(--slate);margin-top:2px;">${escapeHtml(f.note)}</div>` : ''}
+        </td>
+        <td class="st-cell-owner" data-label="Employee / Owner">${escapeHtml(empName)}</td>
+        <td class="st-cell-size" data-label="File Size"><span class="tag">${sizeStr}</span></td>
+        <td class="st-cell-date" data-label="Date Uploaded">${dateStr}</td>
+        <td class="st-cell-actions" data-label="Actions">
+          <button type="button" class="btn-text-small btn-del-storage-file" data-file-id="${f.id}" data-file-url="${escapeHtml(f.file_url)}" data-file-name="${escapeHtml(f.file_name)}" style="color:var(--red);">
+            Delete
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Wire individual delete buttons
+  tbody.querySelectorAll('.btn-del-storage-file').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const fileName = btn.dataset.fileName;
+      const fileId = btn.dataset.fileId;
+      const fileUrl = btn.dataset.fileUrl;
+
+      const confirmed = confirm(`Permanently delete "${fileName}"? This will delete the stored file from Supabase Storage and remove the database record.`);
+      if (!confirmed) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Deleting...';
+
+      try {
+        // 1. Delete from Supabase Storage
+        const storagePath = getStoragePathFromUrl(fileUrl);
+        if (storagePath) {
+          await sb.storage.from('attachments').remove([storagePath]);
+        }
+
+        // 2. Delete database record
+        const { error } = await sb.from('employee_files').delete().eq('id', fileId);
+        if (error) throw error;
+
+        await loadBossStorageData();
+      } catch (e) {
+        console.error('Delete file error:', e);
+        alert('Could not delete file: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+      }
+    });
+  });
+}
+
+// Wire Storage management events
+$('storage-refresh-btn')?.addEventListener('click', () => loadBossStorageData());
+$('storage-filter-emp')?.addEventListener('change', () => renderBossStorageTable());
 
 // =========================================================
 // PRESENCE — "online now" / "last seen" tracking
@@ -2462,7 +3627,7 @@ function renderHolidayWidget() {
   `).join('');
 
   const btn = $(isBoss ? 'holiday-view-all-btn-boss' : 'holiday-view-all-btn');
-  if (btn) btn.textContent = showAll ? '← Show less' : 'View Full Calendar →';
+  if (btn) btn.textContent = 'View Full Calendar →';
 }
 
 // =========================================================
@@ -2549,15 +3714,33 @@ async function enablePushNotifications() {
 
 async function updatePushButtonState() {
   const btn = $('notif-push-btn');
-  if (!btn || !pushSupported()) { if (btn) btn.classList.add('hidden'); return; }
+  const setBtn = $('settings-push-btn');
+  const setCard = $('set-notif-card');
+
+  if (!pushSupported()) {
+    if (btn) btn.classList.add('hidden');
+    if (setCard) setCard.classList.add('hidden');
+    return;
+  }
+  if (setCard) setCard.classList.remove('hidden');
 
   const sub = await getExistingPushSubscription();
-  if (sub && Notification.permission === 'granted') {
-    btn.textContent = '🔔 Push notifications on';
-    btn.classList.add('enabled');
-  } else {
-    btn.textContent = '🔕 Enable push notifications';
-    btn.classList.remove('enabled');
+  const isEnabled = Boolean(sub && Notification.permission === 'granted');
+
+  [btn, setBtn].forEach(el => {
+    if (!el) return;
+    if (isEnabled) {
+      el.textContent = '🔔 Push notifications on';
+      el.classList.add('enabled');
+    } else {
+      el.textContent = '🔕 Enable push notifications';
+      el.classList.remove('enabled');
+    }
+  });
+
+  const setDesc = $('set-notif-desc');
+  if (setDesc) {
+    setDesc.textContent = isEnabled ? 'Push notifications are currently active on this device.' : 'Get alerts for task assignments and comments.';
   }
 }
 
@@ -2674,9 +3857,8 @@ function renderNotificationBell() {
         await sb.from('notifications').update({ read: true }).eq('id', id);
       }
       if (taskId) {
-        const t = allTasksCache.find(x => x.id === taskId);
         $('notif-panel').classList.add('hidden');
-        openCommentsModal(taskId, t?.title || 'Task');
+        openTaskDetail(taskId, { source: 'notification' });
       }
     });
   });
@@ -2699,14 +3881,18 @@ $('notif-mark-all-read').addEventListener('click', async (e) => {
   await sb.from('notifications').update({ read: true }).in('id', unreadIds);
 });
 
-$('notif-push-btn').addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const btn = e.target;
-  btn.disabled = true;
-  btn.textContent = 'Setting up...';
-  await enablePushNotifications();
-  await updatePushButtonState();
-  btn.disabled = false;
+['notif-push-btn', 'settings-push-btn'].forEach(id => {
+  const btn = $(id);
+  if (btn) {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = 'Setting up...';
+      await enablePushNotifications();
+      await updatePushButtonState();
+      btn.disabled = false;
+    });
+  }
 });
 
 function startNotificationRealtime() {
@@ -2718,6 +3904,7 @@ function startNotificationRealtime() {
     }, (payload) => {
       notificationsCache.unshift(payload.new);
       renderNotificationBell();
+      loadRecentActivityFeed();
     })
     .subscribe();
 }
@@ -2751,19 +3938,28 @@ const SIDEBAR_NAV = {
   boss: [
     { page: 'dashboard', label: 'Dashboard', icon: '🏠' },
     { page: 'tasks', label: 'Tasks', icon: '📋' },
-    { page: 'employees', label: 'Employees', icon: '👥' }
+    { page: 'employees', label: 'Employees', icon: '👥' },
+    { page: 'calendar', label: 'Calendar', icon: '📅' },
+    { page: 'activity', label: 'Recent Activity', icon: '⚡' },
+    { page: 'storage', label: 'Storage', icon: '💾' }
   ],
   employee: [
     { page: 'dashboard', label: 'Dashboard', icon: '🏠' },
     { page: 'inbox', label: 'Work Inbox', icon: '📥', badgeId: 'my-task-count' },
+    { page: 'calendar', label: 'Calendar', icon: '📅' },
+    { page: 'activity', label: 'Recent Activity', icon: '⚡' },
     { page: 'files', label: 'My Files', icon: '📄' },
     { page: 'tools', label: 'Tools', icon: '🛠️' }
   ]
 };
 
 let currentAppPage = 'dashboard';
+let pageHistory = ['dashboard'];
 
-function showPage(pageName) {
+function showPage(pageName, pushToHistory = true) {
+  if (pushToHistory && pageName !== currentAppPage) {
+    pageHistory.push(pageName);
+  }
   currentAppPage = pageName;
   document.querySelectorAll('.app-page').forEach(el => {
     el.classList.toggle('active', el.dataset.pageGroup === pageName);
@@ -2771,14 +3967,78 @@ function showPage(pageName) {
   document.querySelectorAll('.sidebar-nav-btn[data-page]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.page === pageName);
   });
+  document.querySelectorAll('.bnav-item[data-page]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.page === pageName);
+  });
 
+  const PAGE_TITLES = {
+    dashboard: 'Dashboard',
+    tasks: 'Tasks',
+    inbox: 'Work Inbox',
+    employees: 'Employees',
+    calendar: 'Calendar',
+    activity: 'Recent Activity',
+    storage: 'Storage',
+    files: 'My Files',
+    tools: 'Tools',
+    settings: 'Settings'
+  };
   const role = currentProfile?.role === 'boss' ? 'boss' : 'employee';
   const navItem = (SIDEBAR_NAV[role] || []).find(n => n.page === pageName);
-  $('app-title').textContent = navItem ? navItem.label : 'Dashboard';
+  $('app-title').textContent = PAGE_TITLES[pageName] || (navItem ? navItem.label : 'Dashboard');
+
+  if (pageName === 'calendar') {
+    renderCalendarPage();
+  } else if (pageName === 'activity') {
+    renderActivityPage();
+  } else if (pageName === 'settings') {
+    renderSettingsPage();
+  } else if (pageName === 'inbox') {
+    renderWorkInbox();
+  }
+
+  // Ensure bottom navigation tab is visible upon navigating
+  $('bottom-nav')?.classList.remove('nav-hidden');
 
   // close the mobile sidebar after navigating
   $('sidebar').classList.remove('open');
   $('sidebar-backdrop').classList.remove('open');
+}
+
+const BOTTOM_NAV = {
+  employee: [
+    { page: 'dashboard', label: 'Dashboard', icon: '🏠' },
+    { page: 'inbox', label: 'Work Inbox', icon: '📥', badgeId: 'bnav-badge-inbox' },
+    { page: 'files', label: 'My Files', icon: '📁' },
+    { page: 'tools', label: 'Tools', icon: '🛠️' }
+  ],
+  boss: [
+    { page: 'dashboard', label: 'Dashboard', icon: '🏠' },
+    { page: 'tasks', label: 'Tasks', icon: '📋' },
+    { page: 'employees', label: 'Employees', icon: '👥' },
+    { page: 'settings', label: 'Settings', icon: '⚙️' }
+  ]
+};
+
+function renderBottomNav() {
+  const role = currentProfile?.role === 'boss' ? 'boss' : 'employee';
+  const items = BOTTOM_NAV[role] || [];
+  const bnav = $('bottom-nav');
+  if (!bnav) return;
+
+  bnav.innerHTML = items.map(item => `
+    <button type="button" class="bnav-item ${item.page === currentAppPage ? 'active' : ''}" data-page="${item.page}">
+      <span class="bnav-icon">${item.icon}</span>
+      <span class="bnav-label">${item.label}</span>
+      ${item.badgeId ? `<span class="bnav-badge" id="${item.badgeId}">0</span>` : ''}
+    </button>
+  `).join('');
+
+  bnav.querySelectorAll('.bnav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showPage(btn.dataset.page);
+    });
+  });
 }
 
 function renderSidebarNav() {
@@ -2792,7 +4052,7 @@ function renderSidebarNav() {
       ${item.badgeId ? `<span class="snb-badge" id="snb-badge-${item.page}">0</span>` : ''}
     </button>
   `).join('') + `
-    <button type="button" class="sidebar-nav-btn" id="sidebar-settings-btn">
+    <button type="button" class="sidebar-nav-btn" data-page="settings" id="sidebar-settings-btn">
       <span class="snb-icon">⚙️</span><span class="snb-label">Settings</span>
     </button>
   `;
@@ -2800,29 +4060,69 @@ function renderSidebarNav() {
   nav.querySelectorAll('.sidebar-nav-btn[data-page]').forEach(btn => {
     btn.addEventListener('click', () => showPage(btn.dataset.page));
   });
-  $('sidebar-settings-btn').addEventListener('click', () => $('change-pw-btn').click());
 
   $('sidebar-quick-create').classList.toggle('hidden', role !== 'boss');
 
-  showPage('dashboard');
+  renderBottomNav();
+  showPage('dashboard', false);
 }
 
 // keep the Work Inbox sidebar badge synced to the real task count
 function updateSidebarInboxBadge() {
-  const badge = $('snb-badge-inbox');
   const count = $('my-task-count');
-  if (badge && count) badge.textContent = count.textContent;
+  if (!count) return;
+  const val = count.textContent;
+  const badge = $('snb-badge-inbox');
+  if (badge) badge.textContent = val;
+  const bnavBadge = $('bnav-badge-inbox');
+  if (bnavBadge) bnavBadge.textContent = val;
 }
 
-// ---- mobile sidebar toggle ----
-$('sidebar-toggle-btn').addEventListener('click', () => {
-  $('sidebar').classList.toggle('open');
-  $('sidebar-backdrop').classList.toggle('open');
+function closeMobileDrawer() {
+  $('sidebar')?.classList.remove('open');
+  $('sidebar-backdrop')?.classList.remove('open');
+}
+
+// ---- mobile sidebar toggle & backdrop tap ----
+$('sidebar-toggle-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpen = $('sidebar').classList.toggle('open');
+  $('sidebar-backdrop').classList.toggle('open', isOpen);
 });
-$('sidebar-backdrop').addEventListener('click', () => {
-  $('sidebar').classList.remove('open');
-  $('sidebar-backdrop').classList.remove('open');
+
+$('sidebar-backdrop').addEventListener('click', (e) => {
+  e.preventDefault();
+  closeMobileDrawer();
 });
+
+// Auto-close drawer when clicking on any action button inside it
+$('sidebar').addEventListener('click', (e) => {
+  if (e.target.closest('.sidebar-nav-btn') || e.target.closest('.sidebar-quick-btn')) {
+    closeMobileDrawer();
+  }
+});
+
+// Swipe-left gesture on drawer to close it smoothly
+let drawerTouchStartX = 0;
+let drawerTouchStartY = 0;
+
+$('sidebar').addEventListener('touchstart', (e) => {
+  if (e.touches && e.touches.length > 0) {
+    drawerTouchStartX = e.touches[0].clientX;
+    drawerTouchStartY = e.touches[0].clientY;
+  }
+}, { passive: true });
+
+$('sidebar').addEventListener('touchend', (e) => {
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    const diffX = drawerTouchStartX - e.changedTouches[0].clientX;
+    const diffY = Math.abs(drawerTouchStartY - e.changedTouches[0].clientY);
+    // If swiped left by more than 40px and horizontal movement exceeds vertical
+    if (diffX > 40 && diffX > diffY) {
+      closeMobileDrawer();
+    }
+  }
+}, { passive: true });
 
 // ---- desktop sidebar collapse (260px <-> 80px) ----
 $('sidebar-collapse-btn').addEventListener('click', (e) => {
@@ -2834,12 +4134,38 @@ if (localStorage.getItem('eoffice-sidebar-collapsed') === '1') {
   $('sidebar').classList.add('collapsed');
 }
 
+// ---- auto-hide bottom navigation tab on scroll (mobile) ----
+let lastScrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+let scrollTicking = false;
+
+window.addEventListener('scroll', () => {
+  if (!scrollTicking) {
+    window.requestAnimationFrame(() => {
+      const currentScrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      const bnav = $('bottom-nav');
+      if (bnav && window.innerWidth <= 900) {
+        // When scrolling down / swiping finger up past top bar
+        if (currentScrollY > lastScrollY && currentScrollY > 60) {
+          bnav.classList.add('nav-hidden');
+        } else if (currentScrollY < lastScrollY || currentScrollY <= 20) {
+          bnav.classList.remove('nav-hidden');
+        }
+      }
+      lastScrollY = Math.max(0, currentScrollY);
+      scrollTicking = false;
+    });
+    scrollTicking = true;
+  }
+}, { passive: true });
+
 // ---- Quick Create (boss only) ----
 $('qc-new-task').addEventListener('click', () => {
+  closeMobileDrawer();
   showPage('tasks');
   setTimeout(() => $('assign-title')?.focus(), 100);
 });
 $('qc-new-announcement').addEventListener('click', () => {
+  closeMobileDrawer();
   showPage('dashboard');
   setTimeout(() => $('notice-title')?.focus(), 100);
 });
@@ -2859,8 +4185,9 @@ searchInput.addEventListener('input', () => {
   allTasksCache.forEach(t => {
     if (t.title.toLowerCase().includes(q)) {
       results.push({ type: 'Task', label: t.title, action: () => {
-        showPage(currentProfile.role === 'boss' ? 'tasks' : 'inbox');
-        openCommentsModal(t.id, t.title);
+        searchResultsEl.classList.add('hidden');
+        searchInput.value = '';
+        openTaskDetail(t.id, { source: 'search' });
       }});
     }
   });
@@ -2909,11 +4236,874 @@ document.querySelectorAll('.tu-btn[data-tu-page]').forEach(btn => {
   btn.addEventListener('click', () => showPage(btn.dataset.tuPage));
 });
 const tuSettingsBtn = $('tu-settings-btn');
-if (tuSettingsBtn) tuSettingsBtn.addEventListener('click', () => $('change-pw-btn').click());
+if (tuSettingsBtn) tuSettingsBtn.addEventListener('click', () => showPage('settings'));
 const tuSettingsBtnBoss = $('tu-settings-btn-boss');
-if (tuSettingsBtnBoss) tuSettingsBtnBoss.addEventListener('click', () => $('change-pw-btn').click());
+if (tuSettingsBtnBoss) tuSettingsBtnBoss.addEventListener('click', () => showPage('settings'));
 document.querySelectorAll('.tu-btn-soon').forEach(btn => {
   btn.addEventListener('click', () => alert('Coming soon!'));
+});
+
+// =========================================================
+// CALENDAR PAGE (Shared for Boss and Employee)
+// =========================================================
+let calCurrentYear = new Date().getFullYear();
+let calCurrentMonth = new Date().getMonth(); // 0-11
+let calSelectedDate = toDateStr(new Date());
+let calFilter = 'all'; // 'all' | 'holidays' | 'tasks'
+let calScope = 'mine'; // 'mine' | 'everyone' (for employee)
+let calShowAnnouncements = false;
+
+function initCalendar() {
+  $('cal-prev-btn')?.addEventListener('click', () => {
+    calCurrentMonth--;
+    if (calCurrentMonth < 0) {
+      calCurrentMonth = 11;
+      calCurrentYear--;
+    }
+    renderCalendarPage();
+  });
+
+  $('cal-next-btn')?.addEventListener('click', () => {
+    calCurrentMonth++;
+    if (calCurrentMonth > 11) {
+      calCurrentMonth = 0;
+      calCurrentYear++;
+    }
+    renderCalendarPage();
+  });
+
+  $('cal-today-btn')?.addEventListener('click', () => {
+    const today = new Date();
+    calCurrentYear = today.getFullYear();
+    calCurrentMonth = today.getMonth();
+    calSelectedDate = toDateStr(today);
+    renderCalendarPage();
+  });
+
+  document.querySelectorAll('.cal-chip[data-cal-filter]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.cal-chip[data-cal-filter]').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      calFilter = chip.dataset.calFilter;
+      renderCalendarGrid();
+      renderCalendarSelectedDay();
+    });
+  });
+
+  // Employee scope toggle (Mine vs Everyone's)
+  document.querySelectorAll('.inbox-scope-btn[data-cal-scope]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.inbox-scope-btn[data-cal-scope]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      calScope = btn.dataset.calScope;
+      renderCalendarGrid();
+      renderCalendarSelectedDay();
+    });
+  });
+
+  // Boss employee filter dropdown
+  $('cal-filter-employee')?.addEventListener('change', () => {
+    renderCalendarGrid();
+    renderCalendarSelectedDay();
+  });
+
+  // Announcements toggle
+  $('cal-toggle-announcements')?.addEventListener('change', (e) => {
+    calShowAnnouncements = e.target.checked;
+    const legendNotice = $('cal-legend-notice-item');
+    if (legendNotice) legendNotice.classList.toggle('hidden', !calShowAnnouncements);
+    renderCalendarGrid();
+    renderCalendarSelectedDay();
+  });
+}
+
+function updateCalendarControlsVisibility() {
+  const isBoss = currentProfile?.role === 'boss';
+  const bossFilterWrap = $('cal-boss-filter-wrap');
+  const empScopeToggle = $('cal-scope-toggle');
+
+  if (bossFilterWrap) bossFilterWrap.classList.toggle('hidden', !isBoss);
+  if (empScopeToggle) empScopeToggle.classList.toggle('hidden', isBoss);
+
+  if (isBoss && $('cal-filter-employee')) {
+    const sel = $('cal-filter-employee');
+    const currentVal = sel.value;
+    const empList = employeesCache.length > 0 ? employeesCache : (employeeDirectoryCache || []);
+    sel.innerHTML = '<option value="all">All employees</option>' +
+      empList.map(e => `<option value="${e.id}">${escapeHtml(e.full_name)}</option>`).join('');
+    if (currentVal && sel.querySelector(`option[value="${currentVal}"]`)) {
+      sel.value = currentVal;
+    }
+  }
+}
+
+function getCalendarFilteredTasks() {
+  const isBoss = currentProfile?.role === 'boss';
+  let tasks = allTasksCache || [];
+  if (isBoss) {
+    const empVal = $('cal-filter-employee')?.value || 'all';
+    if (empVal !== 'all') {
+      tasks = tasks.filter(t => t.assigned_to === empVal);
+    }
+  } else {
+    if (calScope === 'mine') {
+      tasks = tasks.filter(t => t.assigned_to === currentUser?.id);
+    }
+  }
+  return tasks;
+}
+
+function renderCalendarPage() {
+  updateCalendarControlsVisibility();
+  renderCalendarGrid();
+  renderCalendarSelectedDay();
+}
+
+function renderCalendarGrid() {
+  const gridEl = $('calendar-grid');
+  const titleEl = $('calendar-month-year');
+  if (!gridEl) return;
+
+  const monthDate = new Date(calCurrentYear, calCurrentMonth, 1);
+  if (titleEl) {
+    titleEl.textContent = monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+
+  // Get holidays for this year (+ previous and next year for month padding)
+  const holidays = [
+    ...getAllHolidays(calCurrentYear - 1),
+    ...getAllHolidays(calCurrentYear),
+    ...getAllHolidays(calCurrentYear + 1)
+  ];
+  const holidayMap = new Map();
+  holidays.forEach(h => {
+    if (!holidayMap.has(h.date)) holidayMap.set(h.date, h);
+  });
+
+  // Get tasks map by deadline
+  const tasks = getCalendarFilteredTasks();
+  const tasksMap = new Map();
+  tasks.forEach(t => {
+    if (t.deadline) {
+      if (!tasksMap.has(t.deadline)) tasksMap.set(t.deadline, []);
+      tasksMap.get(t.deadline).push(t);
+    }
+  });
+
+  // Get notices map by posted date
+  const noticesMap = new Map();
+  if (calShowAnnouncements && noticesCache) {
+    noticesCache.forEach(n => {
+      if (n.created_at) {
+        const dStr = n.created_at.slice(0, 10);
+        if (!noticesMap.has(dStr)) noticesMap.set(dStr, []);
+        noticesMap.get(dStr).push(n);
+      }
+    });
+  }
+
+  const todayStr = toDateStr(new Date());
+  const firstDay = new Date(calCurrentYear, calCurrentMonth, 1);
+  const startDow = firstDay.getDay(); // 0 = Sunday
+  const daysInMonth = new Date(calCurrentYear, calCurrentMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(calCurrentYear, calCurrentMonth, 0).getDate();
+
+  const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+  let html = '';
+
+  for (let i = 0; i < totalCells; i++) {
+    let dayNum;
+    let isOtherMonth = false;
+    let cellDate;
+
+    if (i < startDow) {
+      // Previous month
+      dayNum = daysInPrevMonth - startDow + 1 + i;
+      isOtherMonth = true;
+      const prevM = calCurrentMonth === 0 ? 11 : calCurrentMonth - 1;
+      const prevY = calCurrentMonth === 0 ? calCurrentYear - 1 : calCurrentYear;
+      cellDate = toDateStr(new Date(prevY, prevM, dayNum));
+    } else if (i < startDow + daysInMonth) {
+      // Current month
+      dayNum = i - startDow + 1;
+      cellDate = toDateStr(new Date(calCurrentYear, calCurrentMonth, dayNum));
+    } else {
+      // Next month
+      dayNum = i - (startDow + daysInMonth) + 1;
+      isOtherMonth = true;
+      const nextM = calCurrentMonth === 11 ? 0 : calCurrentMonth + 1;
+      const nextY = calCurrentMonth === 11 ? calCurrentYear + 1 : calCurrentYear;
+      cellDate = toDateStr(new Date(nextY, nextM, dayNum));
+    }
+
+    const isToday = cellDate === todayStr;
+    const isSelected = cellDate === calSelectedDate;
+
+    const dayHoliday = holidayMap.get(cellDate);
+    const dayTasks = tasksMap.get(cellDate) || [];
+    const dayNotices = noticesMap.get(cellDate) || [];
+
+    // Collect indicator dots according to calFilter
+    const dots = [];
+    if ((calFilter === 'all' || calFilter === 'holidays') && dayHoliday) {
+      dots.push({ type: 'holiday', title: dayHoliday.name });
+    }
+    if (calFilter === 'all' || calFilter === 'tasks') {
+      dayTasks.forEach(t => {
+        let type = 'pending';
+        if (isOverdue(t)) type = 'overdue';
+        else if (t.status === 'complete') type = 'complete';
+        else if (t.status === 'in_progress') type = 'progress';
+        dots.push({ type, title: t.title });
+      });
+    }
+    if (calShowAnnouncements && (calFilter === 'all') && dayNotices.length > 0) {
+      dayNotices.forEach(n => {
+        dots.push({ type: 'notice', title: n.title });
+      });
+    }
+
+    const maxVisibleDots = 3;
+    const visibleDots = dots.slice(0, maxVisibleDots);
+    const overflowDots = dots.length - maxVisibleDots;
+
+    const dotsHtml = visibleDots.map(d => `<span class="cal-dot cal-dot-${d.type === 'holiday' ? 'holiday' : d.type === 'notice' ? 'notice' : 'task-' + d.type}"></span>`).join('') +
+      (overflowDots > 0 ? `<span class="cal-dot-more">+${overflowDots}</span>` : '');
+
+    const holidayTitleHtml = (dayHoliday && (calFilter === 'all' || calFilter === 'holidays'))
+      ? `<div class="cal-day-holiday-title" title="${escapeHtml(dayHoliday.name)}">${escapeHtml(dayHoliday.name)}</div>`
+      : '';
+
+    html += `
+      <div class="cal-day ${isOtherMonth ? 'cal-day-other-month' : ''} ${isToday ? 'cal-day-today' : ''} ${isSelected ? 'cal-day-selected' : ''}" data-date="${cellDate}">
+        <div class="cal-day-number">${dayNum}</div>
+        ${holidayTitleHtml}
+        <div class="cal-day-dots">${dotsHtml}</div>
+      </div>
+    `;
+  }
+
+  gridEl.innerHTML = html;
+
+  // Day cell click events
+  gridEl.querySelectorAll('.cal-day').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const dStr = cell.dataset.date;
+      selectCalendarDay(dStr);
+    });
+  });
+}
+
+function selectCalendarDay(dateStr) {
+  calSelectedDate = dateStr;
+  document.querySelectorAll('.cal-day').forEach(cell => {
+    cell.classList.toggle('cal-day-selected', cell.dataset.date === dateStr);
+  });
+  renderCalendarSelectedDay();
+}
+
+function renderCalendarSelectedDay() {
+  const contentEl = $('cal-selected-day-content');
+  const titleEl = $('cal-selected-day-title');
+  const subEl = $('cal-selected-day-sub');
+  if (!contentEl) return;
+
+  if (!calSelectedDate) {
+    if (titleEl) titleEl.textContent = 'Events';
+    if (subEl) subEl.textContent = 'Select a date';
+    contentEl.innerHTML = '<div class="cal-empty-msg">No date selected.</div>';
+    return;
+  }
+
+  const d = parseDateStr(calSelectedDate);
+  const formattedDate = d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+
+  if (titleEl) titleEl.textContent = formattedDate;
+
+  const holidays = [
+    ...getAllHolidays(d.getFullYear() - 1),
+    ...getAllHolidays(d.getFullYear()),
+    ...getAllHolidays(d.getFullYear() + 1)
+  ];
+  const holiday = holidays.find(h => h.date === calSelectedDate);
+  const tasks = getCalendarFilteredTasks().filter(t => t.deadline === calSelectedDate);
+  const notices = calShowAnnouncements && noticesCache
+    ? noticesCache.filter(n => n.created_at && n.created_at.slice(0, 10) === calSelectedDate)
+    : [];
+
+  const showHolidays = (calFilter === 'all' || calFilter === 'holidays') && !!holiday;
+  const showTasks = (calFilter === 'all' || calFilter === 'tasks') && tasks.length > 0;
+  const showNotices = calShowAnnouncements && (calFilter === 'all') && notices.length > 0;
+
+  const totalItems = (showHolidays ? 1 : 0) + (showTasks ? tasks.length : 0) + (showNotices ? notices.length : 0);
+  if (subEl) {
+    subEl.textContent = totalItems === 0
+      ? 'No events scheduled'
+      : `${totalItems} event${totalItems === 1 ? '' : 's'}`;
+  }
+
+  if (totalItems === 0) {
+    contentEl.innerHTML = '<div class="cal-empty-msg">No holidays or deadlines on this date.</div>';
+    return;
+  }
+
+  let html = '';
+
+  // 1. Holiday card
+  if (showHolidays) {
+    const typeLabel = { public: 'Public Holiday', restricted: 'Restricted Holiday', weekly: 'Weekly Off' };
+    html += `
+      <div class="cal-card cal-holiday-card">
+        <div class="cal-card-title">${escapeHtml(holiday.name)}</div>
+        <div class="cal-card-meta">
+          <span class="tag tag-holiday" style="background:#FEE2E2;color:#991B1B;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">
+            ${typeLabel[holiday.type] || holiday.type}
+          </span>
+          <span>${formatDate(holiday.date)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // 2. Task cards
+  if (showTasks) {
+    tasks.forEach(t => {
+      const overdue = isOverdue(t);
+      const isComplete = t.status === 'complete';
+      let statusTagHtml = '';
+      if (overdue) {
+        statusTagHtml = '<span class="tag" style="background:#FEE2E2;color:#B91C1C;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Overdue</span>';
+      } else if (isComplete) {
+        statusTagHtml = '<span class="tag" style="background:#D1FAE5;color:#065F46;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Complete</span>';
+      } else if (t.status === 'in_progress') {
+        statusTagHtml = '<span class="tag" style="background:#DBEAFE;color:#1E40AF;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">In Progress</span>';
+      } else if (t.status === 'accepted') {
+        statusTagHtml = '<span class="tag" style="background:#FEF3C7;color:#92400E;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Accepted</span>';
+      } else {
+        statusTagHtml = '<span class="tag" style="background:#FEF3C7;color:#92400E;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">New</span>';
+      }
+
+      const empName = t.employee?.full_name || 'Unassigned';
+      html += `
+        <div class="cal-card cal-task-card cal-card-clickable ${overdue ? 'is-overdue' : ''} ${isComplete ? 'is-complete' : ''}" data-task-id="${t.id}" data-task-title="${escapeHtml(t.title)}" title="Click to view task details and comments">
+          <div class="cal-card-title">${escapeHtml(t.title)}</div>
+          <div class="cal-card-meta">
+            <span class="cal-card-author">👤 ${escapeHtml(empName)}</span>
+            ${statusTagHtml}
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 3. Announcements
+  if (showNotices) {
+    notices.forEach(n => {
+      const authorName = n.author?.full_name || 'Admin';
+      html += `
+        <div class="cal-card cal-notice-card">
+          <div class="cal-card-title">📢 ${escapeHtml(n.title)}</div>
+          <div class="cal-card-meta">
+            <span class="cal-card-author">By ${escapeHtml(authorName)}</span>
+            <span class="tag" style="background:#EDE9FE;color:#5B21B6;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Notice</span>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  contentEl.innerHTML = html;
+
+  // Add click handlers on task cards to open task detail view
+  contentEl.querySelectorAll('.cal-task-card.cal-card-clickable').forEach(card => {
+    card.addEventListener('click', () => {
+      const taskId = card.dataset.taskId;
+      openTaskDetail(taskId, { source: 'calendar' });
+    });
+  });
+}
+
+initCalendar();
+
+// =========================================================
+// RECENT ACTIVITY FEED (Shared for Boss and Employee)
+// =========================================================
+let activityFeedCache = [];
+let activityFilter = 'all'; // 'all' | 'tasks' | 'comments' | 'announcements'
+let activityDisplayLimit = 20;
+
+function formatRelativeTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins === 1) return '1 min ago';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours === 1) return '1 hour ago';
+  if (hours < 24) return `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return '1 day ago';
+  if (days < 7) return `${days} days ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getActivityDayGroupLabel(dateStr) {
+  if (!dateStr) return 'Earlier';
+  const d = new Date(dateStr);
+  const itemDateStr = toDateStr(d);
+  const todayStr = toDateStr(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = toDateStr(yesterday);
+
+  if (itemDateStr === todayStr) return 'Today';
+  if (itemDateStr === yesterdayStr) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function loadRecentActivityFeed() {
+  if (!currentUser) return;
+  const isBoss = currentProfile?.role === 'boss';
+
+  try {
+    // 1. Fetch task_events (assigned, reassigned, accepted, started, completed)
+    const eventsPromise = sb
+      .from('task_events')
+      .select(`
+        *,
+        from_profile:profiles!task_events_from_employee_fkey(full_name),
+        to_profile:profiles!task_events_to_employee_fkey(full_name),
+        actor_profile:profiles!task_events_actor_fkey(full_name)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(30)
+      .then(res => res.data || [])
+      .catch(() => []);
+
+    // 2. Fetch task_comments (comments + attachments)
+    const commentsPromise = sb
+      .from('task_comments')
+      .select(`
+        *,
+        author_profile:profiles!task_comments_author_fkey(full_name)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(30)
+      .then(res => res.data || [])
+      .catch(() => []);
+
+    // 3. Fetch notices (announcements)
+    const noticesPromise = sb
+      .from('notices')
+      .select(`
+        *,
+        author:profiles!notices_created_by_fkey(full_name)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(30)
+      .then(res => res.data || (noticesCache || []))
+      .catch(() => noticesCache || []);
+
+    const [events, comments, notices] = await Promise.all([
+      eventsPromise,
+      commentsPromise,
+      noticesPromise
+    ]);
+
+    const feedItems = [];
+
+    // Map task events
+    events.forEach(ev => {
+      const task = allTasksCache.find(t => t.id === ev.task_id);
+      // For employee, if task is not in their visible tasks cache, omit
+      if (!isBoss && !task) return;
+
+      const taskTitle = task ? task.title : 'Task';
+      const actorName = ev.actor_profile?.full_name || 'Someone';
+      const toName = ev.to_profile?.full_name || 'an employee';
+      const fromName = ev.from_profile?.full_name || 'an employee';
+
+      let icon = '📋';
+      let sentence = '';
+
+      if (ev.event_type === 'assigned') {
+        icon = '📋';
+        sentence = `<strong>${escapeHtml(actorName)}</strong> assigned '<strong>${escapeHtml(taskTitle)}</strong>' to <strong>${escapeHtml(toName)}</strong>`;
+      } else if (ev.event_type === 'reassigned') {
+        icon = '🔄';
+        sentence = `<strong>${escapeHtml(actorName)}</strong> reassigned '<strong>${escapeHtml(taskTitle)}</strong>' from <strong>${escapeHtml(fromName)}</strong> to <strong>${escapeHtml(toName)}</strong>`;
+      } else if (ev.event_type === 'accepted') {
+        icon = '👍';
+        sentence = `<strong>${escapeHtml(actorName)}</strong> accepted '<strong>${escapeHtml(taskTitle)}</strong>'`;
+      } else if (ev.event_type === 'started') {
+        icon = '▶️';
+        sentence = `<strong>${escapeHtml(actorName)}</strong> started work on '<strong>${escapeHtml(taskTitle)}</strong>'`;
+      } else if (ev.event_type === 'completed') {
+        icon = '✅';
+        sentence = `<strong>${escapeHtml(actorName)}</strong> completed '<strong>${escapeHtml(taskTitle)}</strong>'`;
+      } else {
+        sentence = `<strong>${escapeHtml(actorName)}</strong> updated '<strong>${escapeHtml(taskTitle)}</strong>'`;
+      }
+
+      feedItems.push({
+        id: `ev-${ev.id}`,
+        type: 'tasks',
+        icon,
+        sentence,
+        created_at: ev.created_at,
+        taskId: ev.task_id,
+        taskTitle
+      });
+    });
+
+    // Map task comments
+    comments.forEach(c => {
+      const task = allTasksCache.find(t => t.id === c.task_id);
+      if (!isBoss && !task) return;
+
+      const taskTitle = task ? task.title : 'Task';
+      const authorName = c.author_profile?.full_name || 'Someone';
+      let icon = '💬';
+      let sentence = '';
+
+      if (c.attachment_url) {
+        icon = '📎';
+        sentence = `<strong>${escapeHtml(authorName)}</strong> added an attachment to '<strong>${escapeHtml(taskTitle)}</strong>'`;
+      } else {
+        icon = '💬';
+        sentence = `<strong>${escapeHtml(authorName)}</strong> commented on '<strong>${escapeHtml(taskTitle)}</strong>'`;
+      }
+
+      feedItems.push({
+        id: `com-${c.id}`,
+        type: 'comments',
+        icon,
+        sentence,
+        created_at: c.created_at,
+        taskId: c.task_id,
+        taskTitle
+      });
+    });
+
+    // Map notices
+    notices.forEach(n => {
+      const authorName = n.author?.full_name || 'Admin';
+      feedItems.push({
+        id: `not-${n.id}`,
+        type: 'announcements',
+        icon: '📢',
+        sentence: `<strong>${escapeHtml(authorName)}</strong> posted an announcement: '<strong>${escapeHtml(n.title)}</strong>'`,
+        created_at: n.created_at,
+        taskId: null,
+        taskTitle: null
+      });
+    });
+
+    // Sort newest first
+    feedItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    activityFeedCache = feedItems;
+
+    // Render displays
+    renderRecentActivityDashboard();
+    if (currentAppPage === 'activity') {
+      renderActivityPage();
+    }
+  } catch (err) {
+    console.error('loadRecentActivityFeed error:', err);
+  }
+}
+
+function groupActivityItemsByDay(items) {
+  const groups = [];
+  const map = new Map();
+
+  items.forEach(item => {
+    const label = getActivityDayGroupLabel(item.created_at);
+    if (!map.has(label)) {
+      const group = { label, items: [] };
+      map.set(label, group);
+      groups.push(group);
+    }
+    map.get(label).items.push(item);
+  });
+
+  return groups;
+}
+
+function renderActivityItemsHtml(items) {
+  if (!items || items.length === 0) {
+    return '<div class="activity-empty-msg">No activity recorded yet.</div>';
+  }
+
+  const groups = groupActivityItemsByDay(items);
+  return groups.map(g => `
+    <div class="activity-day-group">
+      <div class="activity-day-header">${escapeHtml(g.label)}</div>
+      <div class="activity-day-items">
+        ${g.items.map(item => `
+          <div class="activity-item ${item.taskId ? 'activity-item-clickable' : ''}" ${item.taskId ? `data-task-id="${item.taskId}" data-task-title="${escapeHtml(item.taskTitle)}"` : ''} title="${item.taskId ? 'Click to view task details and comments' : ''}">
+            <span class="activity-icon">${item.icon}</span>
+            <div class="activity-body">
+              <div class="activity-text">${item.sentence}</div>
+              <div class="activity-meta">${formatRelativeTime(item.created_at)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function attachActivityClickListeners(container) {
+  if (!container) return;
+  container.querySelectorAll('.activity-item-clickable[data-task-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const taskId = el.dataset.taskId;
+      openTaskDetail(taskId, { source: 'activity' });
+    });
+  });
+}
+
+function renderRecentActivityDashboard() {
+  const isBoss = currentProfile?.role === 'boss';
+  const targetId = isBoss ? 'recent-activity-dashboard-boss' : 'recent-activity-dashboard-emp';
+  const container = $(targetId);
+  if (!container) return;
+
+  const top10 = activityFeedCache.slice(0, 10);
+  container.innerHTML = renderActivityItemsHtml(top10);
+  attachActivityClickListeners(container);
+}
+
+function renderActivityPage() {
+  const listEl = $('activity-full-list');
+  const paginationRow = $('activity-pagination-row');
+  if (!listEl) return;
+
+  let filtered = activityFeedCache;
+  if (activityFilter !== 'all') {
+    filtered = filtered.filter(item => item.type === activityFilter);
+  }
+
+  const visibleItems = filtered.slice(0, activityDisplayLimit);
+  listEl.innerHTML = renderActivityItemsHtml(visibleItems);
+  attachActivityClickListeners(listEl);
+
+  if (paginationRow) {
+    if (visibleItems.length < filtered.length) {
+      paginationRow.classList.remove('hidden');
+    } else {
+      paginationRow.classList.add('hidden');
+    }
+  }
+}
+
+function initActivityFeed() {
+  // Wire "View all" dashboard buttons
+  ['activity-view-all-btn-boss', 'activity-view-all-btn-emp'].forEach(id => {
+    $(id)?.addEventListener('click', () => showPage('activity'));
+  });
+
+  // Wire full activity filter chips
+  document.querySelectorAll('.act-chip[data-act-filter]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.act-chip[data-act-filter]').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activityFilter = chip.dataset.actFilter;
+      activityDisplayLimit = 20;
+      renderActivityPage();
+    });
+  });
+
+  // Wire "Load more" button
+  $('activity-load-more-btn')?.addEventListener('click', () => {
+    activityDisplayLimit += 20;
+    renderActivityPage();
+  });
+
+  // Refresh on app returning to foreground
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && currentUser) {
+      loadRecentActivityFeed();
+    }
+  });
+
+  const AppPlugin = isNativeApp() ? getCapacitorPlugin('App') : null;
+  if (AppPlugin && typeof AppPlugin.addListener === 'function') {
+    try {
+      AppPlugin.addListener('appStateChange', (state) => {
+        if (state.isActive && currentUser) {
+          loadRecentActivityFeed();
+        }
+      });
+    } catch (e) {
+      console.warn('appStateChange listener error:', e);
+    }
+  }
+}
+
+initActivityFeed();
+
+// =========================================================
+// SETTINGS PAGE (Shared for Boss and Employee)
+// =========================================================
+function renderSettingsPage() {
+  if (!currentUser) return;
+
+  // Account card
+  const nameEl = $('set-acc-name');
+  if (nameEl) nameEl.textContent = currentProfile?.full_name || '—';
+  const emailEl = $('set-acc-email');
+  if (emailEl) emailEl.textContent = currentUser?.email || currentProfile?.email || '—';
+  const roleEl = $('set-acc-role');
+  if (roleEl) roleEl.textContent = currentProfile?.role === 'boss' ? 'Boss (Administrator)' : 'Employee';
+  const desigEl = $('set-acc-designation');
+  if (desigEl) desigEl.textContent = currentProfile?.designation || '—';
+  const deptEl = $('set-acc-department');
+  if (deptEl) deptEl.textContent = currentProfile?.department || '—';
+
+  // Appearance card
+  const theme = getThemePref();
+  const descEl = $('set-theme-desc');
+  if (descEl) descEl.textContent = theme === 'dark' ? 'Current: Dark mode' : 'Current: Light mode';
+  const themeBtn = $('settings-theme-toggle-btn');
+  if (themeBtn) themeBtn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+
+  // Notifications card
+  updatePushButtonState();
+
+  // About card
+  const aboutApp = $('set-about-app');
+  if (aboutApp) aboutApp.textContent = BRAND?.APP_NAME || 'Work Management';
+  const aboutDept = $('set-about-dept');
+  if (aboutDept) aboutDept.textContent = BRAND?.DEPARTMENT_NAME || 'EDC Department';
+  const aboutVer = $('set-about-version');
+  if (aboutVer) aboutVer.textContent = '1.0.0';
+
+  // Session card
+  const logoutUserEl = $('set-logout-user-email');
+  if (logoutUserEl) logoutUserEl.textContent = currentUser?.email || 'user';
+}
+
+function initSettingsPage() {
+  $('settings-open-pw-btn')?.addEventListener('click', openChangePasswordModal);
+  $('settings-theme-toggle-btn')?.addEventListener('click', toggleTheme);
+}
+
+initSettingsPage();
+
+// ---- Android Back button handler ----
+let lastBackPressTime = 0;
+
+function handleAppBackButton() {
+  // 1. Close any open modals
+  const openModals = [
+    'add-employee-modal',
+    'history-modal',
+    'comments-modal',
+    'full-tasks-modal',
+    'reassign-modal',
+    'change-pw-modal',
+    'file-picker-modal'
+  ];
+  for (const modalId of openModals) {
+    const el = $(modalId);
+    if (el && !el.classList.contains('hidden')) {
+      el.classList.add('hidden');
+      return true;
+    }
+  }
+
+  // 2. Close profile drawer
+  const profileDrawer = $('profile-drawer-backdrop');
+  if (profileDrawer && !profileDrawer.classList.contains('hidden')) {
+    profileDrawer.classList.add('hidden');
+    $('profile-drawer')?.classList.remove('open');
+    return true;
+  }
+
+  // 3. Close notification panel
+  const notifPanel = $('notif-panel');
+  if (notifPanel && !notifPanel.classList.contains('hidden')) {
+    notifPanel.classList.add('hidden');
+    return true;
+  }
+
+  // 4. Close mobile sidebar drawer
+  const sidebar = $('sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    sidebar.classList.remove('open');
+    $('sidebar-backdrop')?.classList.remove('open');
+    return true;
+  }
+
+  // 5. If fullscreen task detail is active, close it and return to the previous view
+  const panel = $('inbox-detail-panel');
+  if (panel && panel.classList.contains('task-detail-fullscreen')) {
+    closeTaskDetailFullscreen();
+    return true;
+  }
+
+  // 6. If Work Inbox split detail view is active on mobile, return to ticket list
+  const splitEl = document.querySelector('.inbox-split.detail-active');
+  if (splitEl) {
+    splitEl.classList.remove('detail-active');
+    return true;
+  }
+
+  // 7. Navigate to previous page in app history
+  if (pageHistory.length > 1) {
+    pageHistory.pop(); // remove current page
+    const prevPage = pageHistory[pageHistory.length - 1];
+    showPage(prevPage, false);
+    return true;
+  }
+
+  // 6. Double-tap to exit when already on dashboard
+  const now = Date.now();
+  if (now - lastBackPressTime < 2000) {
+    const AppPlugin = isNativeApp() ? getCapacitorPlugin('App') : null;
+    if (AppPlugin && typeof AppPlugin.exitApp === 'function') {
+      try {
+        AppPlugin.exitApp();
+      } catch (err) {
+        console.warn('exitApp error:', err);
+      }
+    }
+    return false;
+  } else {
+    lastBackPressTime = now;
+    // Show brief toast/hint
+    const toast = document.createElement('div');
+    toast.textContent = 'Press back again to exit';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.4);pointer-events:none;';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1800);
+    return true;
+  }
+}
+
+// Attach listener to Capacitor App plugin if available, or fallback to browser popstate
+const AppPlugin = isNativeApp() ? getCapacitorPlugin('App') : null;
+if (AppPlugin && typeof AppPlugin.addListener === 'function') {
+  try {
+    AppPlugin.addListener('backButton', () => {
+      handleAppBackButton();
+    });
+  } catch (err) {
+    console.warn('App backButton listener registration error:', err);
+  }
+}
+
+window.addEventListener('popstate', () => {
+  handleAppBackButton();
 });
 
 boot();
