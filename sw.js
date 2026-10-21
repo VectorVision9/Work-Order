@@ -8,15 +8,20 @@
 // makes it resolve correctly whether the site lives at the root of a
 // domain or under a subpath like yourname.github.io/Work-Order/.
 
+try {
+  importScripts('brand.js');
+} catch (e) {}
+
 self.addEventListener('push', (event) => {
+  const defaultTitle = (typeof BRAND !== 'undefined' && BRAND.APP_NAME) ? BRAND.APP_NAME : 'Work Management';
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch (e) {
-    data = { title: 'E-Office', body: event.data ? event.data.text() : '' };
+    data = { title: defaultTitle, body: event.data ? event.data.text() : '' };
   }
 
-  const title = data.title || 'E-Office';
+  const title = data.title || defaultTitle;
   const options = {
     body: data.body || '',
     icon: 'favicon-512.png',       // the small app icon shown next to the notification
