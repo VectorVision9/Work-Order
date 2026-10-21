@@ -2,19 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>E-Office — Task Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Work Management — Task Tracker</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png">
 <link rel="stylesheet" href="style.css">
+<style>
+  #app-splash {
+    position: fixed; inset: 0; z-index: 99999; background: #0b1121;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+  }
+  #app-splash.hidden { display: none !important; }
+  #auth-view.hidden, #app-view.hidden { display: none !important; }
+</style>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.4.0/dist/model-viewer.min.js"></script>
 </head>
 <body>
 
+<!-- ========================= SPLASH ========================= -->
+<div id="app-splash" class="app-splash-screen">
+  <div class="app-splash-content">
+    <img src="branding/app-icon-prepared.png" alt="Logo" class="app-splash-logo">
+    <div class="app-splash-spinner"></div>
+  </div>
+</div>
+
 <!-- ========================= AUTH ========================= -->
-<div id="auth-view">
+<div id="auth-view" class="hidden">
   <div class="auth-shell">
     <div class="auth-bg-grid"></div>
     <div class="auth-bg-blobs">
@@ -138,9 +154,16 @@
         </div>
         <span class="ic-status-dot"></span>
       </div>
+
+      <div class="sidebar-mobile-footer" id="sidebar-mobile-footer">
+        <button type="button" class="sidebar-logout-btn" id="sidebar-logout-btn">
+          <span class="slb-icon">🚪</span>
+          <span class="slb-label">Log out</span>
+        </button>
+      </div>
     </aside>
 
-    <div class="sidebar-backdrop hidden" id="sidebar-backdrop"></div>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- ---------- MAIN COLUMN ---------- -->
     <div class="main-column">
@@ -295,15 +318,26 @@
         </div>
       </div>
 
+      <div class="panel panel-recent-activity">
+        <div class="panel-header-row">
+          <h2>⚡ Recent Activity</h2>
+          <button type="button" class="btn-secondary btn-small" id="activity-view-all-btn-boss">View all →</button>
+        </div>
+        <div class="recent-activity-list" id="recent-activity-dashboard-boss">
+          <p class="activity-loading-msg">Loading activity...</p>
+        </div>
+      </div>
+
       <div class="tools-utilities-footer">
         <div class="tu-label">Tools &amp; Utilities</div>
         <div class="tu-row">
           <button type="button" class="tu-btn" data-tu-page="tasks"><span class="tu-icon">📋</span>All Tasks</button>
           <button type="button" class="tu-btn" data-tu-page="employees"><span class="tu-icon">👥</span>Employees</button>
+          <button type="button" class="tu-btn" data-tu-page="calendar"><span class="tu-icon">📅</span>Calendar</button>
+          <button type="button" class="tu-btn" data-tu-page="activity"><span class="tu-icon">⚡</span>Activity</button>
+          <button type="button" class="tu-btn" data-tu-page="storage"><span class="tu-icon">💾</span>Storage</button>
           <button type="button" class="tu-btn" id="tu-settings-btn-boss"><span class="tu-icon">⚙️</span>Settings</button>
-          <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📅</span>Calendar</button>
           <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📊</span>Reports</button>
-          <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📁</span>Projects</button>
         </div>
       </div>
     </div>
@@ -367,7 +401,7 @@
         </div>
         <table>
           <thead>
-            <tr><th>Employee</th><th>Task</th><th>Deadline</th><th>Status</th><th>Assigned</th><th>Actions</th></tr>
+            <tr><th>Employee</th><th>Task</th><th>Deadline</th><th>Status</th><th>Assigned</th><th>Completed</th><th>Actions</th></tr>
           </thead>
           <tbody id="tasks-tbody"></tbody>
         </table>
@@ -379,6 +413,64 @@
         <h2>Employees <span class="tag" id="employee-count-tag">0</span></h2>
         <div class="id-card-grid" id="employee-list"></div>
         <button class="btn-secondary" id="open-add-employee" style="margin-top:14px;">+ Add new employee</button>
+      </div>
+    </div>
+
+    <div class="app-page" data-page-group="storage">
+      <div class="panel">
+        <div class="storage-head-row">
+          <div>
+            <h2>💾 Storage Management <span class="tag" id="storage-total-tag">0 MB / 1 GB</span></h2>
+            <p class="tool-sub" style="margin-bottom:14px;">Monitor overall attachment storage across all employee lockers. Employee file contents are private (metadata only shown below).</p>
+          </div>
+          <button type="button" class="btn-secondary" id="storage-refresh-btn">🔄 Refresh</button>
+        </div>
+
+        <div class="storage-meter-box">
+          <div class="storage-meter-header">
+            <span class="sm-label">Total Cloud Storage Used</span>
+            <span class="sm-values" id="storage-meter-text">0 MB of 1,024 MB (0%)</span>
+          </div>
+          <div class="storage-progress-bar">
+            <div class="storage-progress-fill" id="storage-progress-fill" style="width:0%;"></div>
+          </div>
+          <div class="storage-meter-footer">
+            <span id="storage-free-text">1,024 MB free</span>
+            <span>Plan Limit: 1.00 GB</span>
+          </div>
+        </div>
+
+        <h3 style="margin:24px 0 12px 0;">Per-Employee Usage</h3>
+        <div class="storage-emp-grid" id="storage-emp-list">
+          <p class="notice-empty">Loading employee storage...</p>
+        </div>
+
+        <div class="storage-files-header" style="margin-top:28px;">
+          <h3 style="margin:0;">Employee Files Directory <span class="tag" id="storage-files-count">0 files</span></h3>
+          <div class="storage-files-filters">
+            <select id="storage-filter-emp">
+              <option value="">All employees</option>
+            </select>
+          </div>
+        </div>
+        <p class="tool-note" style="margin:8px 0 14px 0;">Notice: As per security and privacy design, files cannot be viewed or downloaded by the Boss. Only metadata (file name, size, owner, date) is visible.</p>
+
+        <div class="table-responsive">
+          <table class="storage-table">
+            <thead>
+              <tr>
+                <th>File Name</th>
+                <th>Employee / Owner</th>
+                <th>File Size</th>
+                <th>Date Uploaded</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="storage-files-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--slate);">No files uploaded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -480,95 +572,31 @@
           <div class="ticket-grid" id="my-tickets"></div>
         </div>
 
+        <div class="panel panel-recent-activity">
+          <div class="panel-header-row">
+            <h2>⚡ Recent Activity</h2>
+            <button type="button" class="btn-secondary btn-small" id="activity-view-all-btn-emp">View all →</button>
+          </div>
+          <div class="recent-activity-list" id="recent-activity-dashboard-emp">
+            <p class="activity-loading-msg">Loading activity...</p>
+          </div>
+        </div>
+
         <div class="tools-utilities-footer">
           <div class="tu-label">Tools &amp; Utilities</div>
           <div class="tu-row">
             <button type="button" class="tu-btn" data-tu-page="files"><span class="tu-icon">📁</span>My Files</button>
             <button type="button" class="tu-btn" data-tu-page="tools"><span class="tu-icon">🛠️</span>Tools</button>
+            <button type="button" class="tu-btn" data-tu-page="calendar"><span class="tu-icon">📅</span>Calendar</button>
+            <button type="button" class="tu-btn" data-tu-page="activity"><span class="tu-icon">⚡</span>Activity</button>
             <button type="button" class="tu-btn" id="tu-settings-btn"><span class="tu-icon">⚙️</span>Settings</button>
-            <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📅</span>Calendar</button>
             <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📊</span>Reports</button>
             <button type="button" class="tu-btn tu-btn-soon"><span class="tu-icon">📁</span>Projects</button>
           </div>
         </div>
       </div>
 
-      <div class="app-page" data-page-group="inbox">
-        <div class="inbox-split">
-          <div class="inbox-split-list">
-            <div class="inbox-header">
-              <h2>📥 Work Inbox <span class="tag" id="my-task-count-side">0</span></h2>
-              <div class="inbox-scope-toggle">
-                <button type="button" class="inbox-scope-btn active" data-scope-side="mine">Mine</button>
-                <button type="button" class="inbox-scope-btn" data-scope-side="everyone">Everyone's</button>
-              </div>
-            </div>
-            <div class="inbox-tabs" id="inbox-tabs-side">
-              <button type="button" class="inbox-tab active" data-tab-side="new">🔴 New <span class="inbox-tab-count" id="tab-count-new-side">0</span></button>
-              <button type="button" class="inbox-tab" data-tab-side="in_progress">🟡 In Progress <span class="inbox-tab-count" id="tab-count-in_progress-side">0</span></button>
-              <button type="button" class="inbox-tab" data-tab-side="completed">🟢 Completed <span class="inbox-tab-count" id="tab-count-completed-side">0</span></button>
-              <button type="button" class="inbox-tab" data-tab-side="archived">⚫ Archived <span class="inbox-tab-count" id="tab-count-archived-side">0</span></button>
-            </div>
-            <div class="ticket-grid ticket-grid-side" id="my-tickets-side"></div>
-          </div>
 
-          <div class="inbox-split-detail" id="inbox-detail-panel">
-            <div class="idc-empty" id="idc-empty">Select a task on the left to view its details.</div>
-
-            <div class="idc-content hidden" id="idc-content">
-              <div class="idc-header">
-                <div>
-                  <span class="wo-number" id="idc-wo"></span>
-                  <span class="stamp" id="idc-status-badge"></span>
-                </div>
-                <div class="idc-header-actions">
-                  <button type="button" class="btn-secondary" id="idc-history-btn">🕒 View History</button>
-                </div>
-              </div>
-              <h2 id="idc-title"></h2>
-              <div class="idc-meta-row">
-                <span id="idc-date"></span>
-                <span id="idc-days-left"></span>
-              </div>
-
-              <div class="idc-info-grid">
-                <div><label>Assigned By</label><div class="idc-info-value" id="idc-assigned-by"></div></div>
-                <div><label>Assigned To</label><div class="idc-info-value" id="idc-assigned-to"></div></div>
-                <div><label>Description</label><div class="idc-info-value" id="idc-description"></div></div>
-              </div>
-
-              <div class="idc-counts-row">
-                <span id="idc-files-count">📎 0 Files</span>
-                <span id="idc-comments-count">💬 0 Comments</span>
-              </div>
-
-              <div class="idc-actions" id="idc-actions"></div>
-
-              <div class="idc-split-bottom">
-                <div class="idc-comments-col">
-                  <h3>Comments</h3>
-                  <div class="idc-comments-list" id="idc-comments-list"></div>
-                  <div class="idc-comment-input-row">
-                    <textarea id="idc-comment-message" rows="2" placeholder="Write a comment..."></textarea>
-                    <div class="idc-comment-actions">
-                      <label class="btn-secondary-small idc-attach-btn" title="Attach image or PDF">
-                        📎
-                        <input type="file" id="idc-comment-file" accept="image/*,application/pdf" class="hidden">
-                      </label>
-                      <button type="button" class="btn-primary btn-gradient" id="idc-comment-send">Send</button>
-                    </div>
-                  </div>
-                  <div class="msg" id="idc-comment-msg"></div>
-                </div>
-                <div class="idc-history-col">
-                  <h3>History</h3>
-                  <div class="idc-history-list" id="idc-history-list"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div class="app-page" data-page-group="tools">
         <div class="panel panel-tool">
@@ -614,11 +642,26 @@
           <h2>My Files <span class="tag" id="my-files-count">0</span></h2>
           <p class="tool-sub">Your own private space to keep images or PDFs for later — payslips, ID scans, notes, anything worth remembering. Only you can see these.</p>
 
+          <div class="my-files-storage-card">
+            <div class="mf-storage-info">
+              <span><strong>Storage Used:</strong> <span id="my-storage-used-text">0.0 MB / 50.0 MB</span></span>
+              <span id="my-storage-pct-text">0%</span>
+            </div>
+            <div class="my-files-progress-bar">
+              <div class="my-files-progress-fill" id="my-files-progress-fill" style="width:0%;"></div>
+            </div>
+            <div class="mf-storage-sub">Per-employee limit: 50 MB total. Images auto-compress; PDF max 5 MB.</div>
+          </div>
+
           <form id="my-file-form">
             <div class="row2">
               <div class="field" style="margin-bottom:0;">
-                <label>File (image or PDF, up to 8 MB)</label>
-                <input type="file" id="my-file-input" accept="image/*,application/pdf" required>
+                <label>File (image or PDF, up to 5 MB)</label>
+                <div class="file-input-wrapper">
+                  <input type="file" id="my-file-input" accept="image/*,application/pdf" class="hidden">
+                  <button type="button" class="btn-secondary file-picker-trigger" id="my-file-pick-btn">📎 Choose or capture file</button>
+                  <span class="file-picked-label" id="my-file-picked-name">No file selected</span>
+                </div>
               </div>
               <div class="field" style="margin-bottom:0;">
                 <label>Note (optional)</label>
@@ -634,8 +677,307 @@
       </div>
     </div>
 
+    <!-- ---------- WORK INBOX PAGE (Shared for Boss and Employee) ---------- -->
+    <div class="app-page" data-page-group="inbox">
+      <div class="inbox-split" id="inbox-split">
+        <div class="inbox-split-list">
+          <div class="inbox-header">
+            <h2>📥 Work Inbox <span class="tag" id="my-task-count-side">0</span></h2>
+            <div class="inbox-scope-toggle">
+              <button type="button" class="inbox-scope-btn active" data-scope-side="mine">Mine</button>
+              <button type="button" class="inbox-scope-btn" data-scope-side="everyone">Everyone's</button>
+            </div>
+          </div>
+          <div class="inbox-tabs" id="inbox-tabs-side">
+            <button type="button" class="inbox-tab active" data-tab-side="new">🔴 New <span class="inbox-tab-count" id="tab-count-new-side">0</span></button>
+            <button type="button" class="inbox-tab" data-tab-side="in_progress">🟡 In Progress <span class="inbox-tab-count" id="tab-count-in_progress-side">0</span></button>
+            <button type="button" class="inbox-tab" data-tab-side="completed">🟢 Completed <span class="inbox-tab-count" id="tab-count-completed-side">0</span></button>
+            <button type="button" class="inbox-tab" data-tab-side="archived">⚫ Archived <span class="inbox-tab-count" id="tab-count-archived-side">0</span></button>
+          </div>
+          <div class="ticket-grid ticket-grid-side" id="my-tickets-side"></div>
+        </div>
+
+        <div class="inbox-split-detail" id="inbox-detail-panel">
+          <div class="idc-empty" id="idc-empty">
+            <div class="idc-empty-back-wrap hidden" id="idc-empty-back-wrap" style="margin-bottom:14px;text-align:left;">
+              <button type="button" class="btn-secondary idc-back-btn" id="idc-empty-back-btn">◀ Back</button>
+            </div>
+            <div id="idc-empty-text">Select a task on the left to view its details.</div>
+          </div>
+
+          <div class="idc-content hidden" id="idc-content">
+            <div class="idc-header">
+              <div>
+                <span class="wo-number" id="idc-wo"></span>
+                <span class="stamp" id="idc-status-badge"></span>
+              </div>
+              <div class="idc-header-actions">
+                <button type="button" class="btn-secondary idc-back-btn" id="idc-back-btn">◀ Back</button>
+                <button type="button" class="btn-secondary" id="idc-history-btn">🕒 View History</button>
+              </div>
+            </div>
+            <h2 id="idc-title"></h2>
+            <div class="idc-meta-row">
+              <span id="idc-date"></span>
+              <span id="idc-days-left"></span>
+            </div>
+
+            <div class="idc-info-grid">
+              <div><label>Assigned By</label><div class="idc-info-value" id="idc-assigned-by"></div></div>
+              <div><label>Assigned To</label><div class="idc-info-value" id="idc-assigned-to"></div></div>
+              <div id="idc-completed-box" class="hidden"><label>Completed</label><div class="idc-info-value" id="idc-completed-at"></div></div>
+              <div><label>Description</label><div class="idc-info-value" id="idc-description"></div></div>
+            </div>
+
+            <div class="idc-counts-row">
+              <span id="idc-files-count">📎 0 Files</span>
+              <span id="idc-comments-count">💬 0 Comments</span>
+            </div>
+
+            <div class="idc-actions" id="idc-actions"></div>
+
+            <div class="idc-split-bottom">
+              <div class="idc-comments-col">
+                <h3>Comments</h3>
+                <div class="idc-comments-list" id="idc-comments-list"></div>
+                <div class="idc-comment-input-row">
+                  <textarea id="idc-comment-message" rows="2" placeholder="Write a comment..."></textarea>
+                  <div class="idc-comment-actions">
+                    <label class="btn-secondary-small idc-attach-btn" title="Attach image or PDF">
+                      📎
+                      <input type="file" id="idc-comment-file" accept="image/*,application/pdf" class="hidden">
+                    </label>
+                    <button type="button" class="btn-primary btn-gradient" id="idc-comment-send">Send</button>
+                  </div>
+                </div>
+                <div class="msg" id="idc-comment-msg"></div>
+              </div>
+              <div class="idc-history-col">
+                <h3>History</h3>
+                <div class="idc-history-list" id="idc-history-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- CALENDAR PAGE (Shared for Boss and Employee) ---------- -->
+    <div class="app-page" data-page-group="calendar">
+      <div class="panel calendar-panel">
+        <div class="calendar-header-bar">
+          <div class="calendar-title-nav">
+            <h2 id="calendar-month-year">Calendar</h2>
+            <div class="calendar-nav-buttons">
+              <button type="button" class="btn-secondary cal-nav-btn" id="cal-prev-btn" title="Previous month" aria-label="Previous month">‹</button>
+              <button type="button" class="btn-secondary cal-today-btn" id="cal-today-btn">Today</button>
+              <button type="button" class="btn-secondary cal-nav-btn" id="cal-next-btn" title="Next month" aria-label="Next month">›</button>
+            </div>
+          </div>
+
+          <div class="calendar-controls">
+            <!-- Filter chips -->
+            <div class="cal-filter-chips">
+              <button type="button" class="cal-chip active" data-cal-filter="all">All</button>
+              <button type="button" class="cal-chip" data-cal-filter="holidays">Holidays</button>
+              <button type="button" class="cal-chip" data-cal-filter="tasks">Tasks</button>
+            </div>
+
+            <!-- Role-based task scope / filter -->
+            <div class="cal-scope-container">
+              <!-- Employee scope toggle -->
+              <div class="inbox-scope-toggle" id="cal-scope-toggle">
+                <button type="button" class="inbox-scope-btn active" id="cal-scope-mine" data-cal-scope="mine">Mine</button>
+                <button type="button" class="inbox-scope-btn" id="cal-scope-everyone" data-cal-scope="everyone">Everyone's</button>
+              </div>
+
+              <!-- Boss employee filter -->
+              <div class="cal-boss-filter hidden" id="cal-boss-filter-wrap">
+                <select id="cal-filter-employee" class="cal-select">
+                  <option value="all">All employees</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Optional announcements toggle -->
+            <label class="cal-toggle-label" title="Show announcements on their posted date">
+              <input type="checkbox" id="cal-toggle-announcements">
+              <span>Announcements</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Dot Legend -->
+        <div class="cal-legend">
+          <span class="cal-legend-item"><span class="cal-dot cal-dot-holiday"></span>Holiday</span>
+          <span class="cal-legend-item"><span class="cal-dot cal-dot-task-pending"></span>New / Assigned</span>
+          <span class="cal-legend-item"><span class="cal-dot cal-dot-task-progress"></span>In Progress</span>
+          <span class="cal-legend-item"><span class="cal-dot cal-dot-task-complete"></span>Completed</span>
+          <span class="cal-legend-item"><span class="cal-dot cal-dot-task-overdue"></span>Overdue</span>
+          <span class="cal-legend-item cal-legend-notice hidden" id="cal-legend-notice-item"><span class="cal-dot cal-dot-notice"></span>Announcement</span>
+        </div>
+
+        <!-- Calendar Main Layout (Desktop: Grid + Side Panel; Mobile: Grid + Stacked List) -->
+        <div class="calendar-layout">
+          <div class="calendar-grid-card">
+            <div class="calendar-weekdays">
+              <div>Sun</div>
+              <div>Mon</div>
+              <div>Tue</div>
+              <div>Wed</div>
+              <div>Thu</div>
+              <div>Fri</div>
+              <div>Sat</div>
+            </div>
+            <div class="calendar-grid" id="calendar-grid">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+
+          <div class="calendar-side-card" id="calendar-day-panel">
+            <div class="cal-day-header">
+              <h3 id="cal-selected-day-title">Events</h3>
+              <span class="cal-day-subtitle" id="cal-selected-day-sub">Select a date</span>
+            </div>
+            <div class="cal-day-content" id="cal-selected-day-content">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- ACTIVITY PAGE (Shared for Boss and Employee) ---------- -->
+    <div class="app-page" data-page-group="activity">
+      <div class="panel activity-page-panel">
+        <div class="activity-header-bar">
+          <h2>⚡ Recent Activity</h2>
+          <div class="activity-filter-chips">
+            <button type="button" class="act-chip active" data-act-filter="all">All</button>
+            <button type="button" class="act-chip" data-act-filter="tasks">Tasks</button>
+            <button type="button" class="act-chip" data-act-filter="comments">Comments</button>
+            <button type="button" class="act-chip" data-act-filter="announcements">Announcements</button>
+          </div>
+        </div>
+
+        <div class="activity-full-list" id="activity-full-list">
+          <p class="activity-loading-msg">Loading activity...</p>
+        </div>
+
+        <div class="activity-pagination-row" id="activity-pagination-row">
+          <button type="button" class="btn-secondary" id="activity-load-more-btn">Load more</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- SETTINGS PAGE (Shared for Boss and Employee) ---------- -->
+    <div class="app-page" data-page-group="settings">
+      <div class="settings-page-container">
+        <!-- Account Card -->
+        <div class="settings-card">
+          <h3>👤 Account</h3>
+          <p class="settings-card-sub">Your personal account information</p>
+          <div class="settings-info-grid">
+            <div class="settings-info-item">
+              <label>Full Name</label>
+              <div class="val" id="set-acc-name">—</div>
+            </div>
+            <div class="settings-info-item">
+              <label>Email Address</label>
+              <div class="val" id="set-acc-email">—</div>
+            </div>
+            <div class="settings-info-item">
+              <label>Role</label>
+              <div class="val" id="set-acc-role">—</div>
+            </div>
+            <div class="settings-info-item">
+              <label>Designation</label>
+              <div class="val" id="set-acc-designation">—</div>
+            </div>
+            <div class="settings-info-item">
+              <label>Department</label>
+              <div class="val" id="set-acc-department">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security Card -->
+        <div class="settings-card">
+          <h3>🔒 Security</h3>
+          <p class="settings-card-sub">Manage your account password and authentication</p>
+          <div class="settings-row">
+            <div>
+              <div style="font-weight:600;font-size:14px;">Password</div>
+              <div style="font-size:12.5px;color:var(--slate);margin-top:2px;">••••••••••••</div>
+            </div>
+            <button type="button" class="btn-secondary" id="settings-open-pw-btn">Change password</button>
+          </div>
+        </div>
+
+        <!-- Appearance Card -->
+        <div class="settings-card">
+          <h3>🎨 Appearance</h3>
+          <p class="settings-card-sub">Customize the look and feel of the interface</p>
+          <div class="settings-row">
+            <div>
+              <div style="font-weight:600;font-size:14px;">Theme Mode</div>
+              <div style="font-size:12.5px;color:var(--slate);margin-top:2px;" id="set-theme-desc">Current: Dark mode</div>
+            </div>
+            <button type="button" class="btn-secondary" id="settings-theme-toggle-btn">Switch Theme</button>
+          </div>
+        </div>
+
+        <!-- Notifications Card -->
+        <div class="settings-card" id="set-notif-card">
+          <h3>🔔 Notifications</h3>
+          <p class="settings-card-sub">Browser push notification settings</p>
+          <div class="settings-row">
+            <div>
+              <div style="font-weight:600;font-size:14px;">Push Notifications</div>
+              <div style="font-size:12.5px;color:var(--slate);margin-top:2px;" id="set-notif-desc">Get alerts for task assignments and comments</div>
+            </div>
+            <button type="button" class="notif-push-toggle" id="settings-push-btn">🔕 Enable push notifications</button>
+          </div>
+        </div>
+
+        <!-- About Card -->
+        <div class="settings-card">
+          <h3>ℹ️ About</h3>
+          <p class="settings-card-sub">Application version and details</p>
+          <div class="settings-info-grid">
+            <div class="settings-info-item">
+              <label>Application</label>
+              <div class="val" id="set-about-app">—</div>
+            </div>
+            <div class="settings-info-item">
+              <label>Department</label>
+              <div class="val" id="set-about-dept">—</div>
+            </div>
+            <div class="settings-info-item">
+              <label>Version</label>
+              <div class="val" id="set-about-version">1.0.0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session / Logout Card -->
+        <div class="settings-card" style="border-color: rgba(239, 68, 68, 0.25);">
+          <h3 style="color: var(--red, #ef4444);">🚪 Session</h3>
+          <p class="settings-card-sub">Sign out of your account on this device</p>
+          <div class="settings-row">
+            <div>
+              <div style="font-weight:600;font-size:14px;">Active Session</div>
+              <div style="font-size:12.5px;color:var(--slate);margin-top:2px;">Logged in as <span id="set-logout-user-email">user</span></div>
+            </div>
+            <button type="button" class="btn-danger-outline" id="settings-logout-btn">Log out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
-  </div>
+      <nav class="bottom-nav" id="bottom-nav"></nav>
+    </div>
   </div>
 </div>
 
@@ -771,16 +1113,40 @@
 <!-- ---------- Change password modal ---------- -->
 <div id="change-pw-modal" class="modal-backdrop hidden">
   <div class="modal">
-    <h2>Change password</h2>
-    <form id="change-pw-form">
+    <h2>Change Password</h2>
+    <form id="change-pw-form" autocomplete="on">
+      <!-- Hidden email field for password managers -->
+      <input type="email" id="pw-username-hidden" autocomplete="username" class="hidden" style="display:none;" tabindex="-1">
+
       <div class="field">
-        <label>New password (min 6 characters)</label>
-        <input type="password" id="new-password" required minlength="6">
+        <label for="current-password">Current password</label>
+        <div class="pw-input-wrap">
+          <input type="password" id="current-password" autocomplete="current-password" required placeholder="Enter current password">
+          <button type="button" class="pw-toggle-btn" data-target="current-password" aria-label="Toggle current password visibility" title="Show/Hide">👁️</button>
+        </div>
       </div>
+
+      <div class="field">
+        <label for="new-password">New password (min 8 characters)</label>
+        <div class="pw-input-wrap">
+          <input type="password" id="new-password" autocomplete="new-password" required minlength="8" placeholder="Enter new password">
+          <button type="button" class="pw-toggle-btn" data-target="new-password" aria-label="Toggle new password visibility" title="Show/Hide">👁️</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="confirm-new-password">Confirm new password</label>
+        <div class="pw-input-wrap">
+          <input type="password" id="confirm-new-password" autocomplete="new-password" required minlength="8" placeholder="Confirm new password">
+          <button type="button" class="pw-toggle-btn" data-target="confirm-new-password" aria-label="Toggle confirm password visibility" title="Show/Hide">👁️</button>
+        </div>
+      </div>
+
       <div class="msg" id="pw-msg"></div>
-      <div class="modal-actions">
+
+      <div class="modal-actions" style="margin-top:18px;">
         <button type="button" class="btn-secondary" id="pw-cancel">Cancel</button>
-        <button type="submit" class="btn-primary">Update password</button>
+        <button type="submit" class="btn-primary" id="pw-submit-btn">Update password</button>
       </div>
     </form>
   </div>
@@ -839,11 +1205,40 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<!-- ---------- Native File Picker Chooser Modal ---------- -->
+<div id="file-picker-modal" class="modal-backdrop hidden">
+  <div class="modal modal-picker">
+    <h2>Attach File</h2>
+    <p class="tool-sub" style="margin-bottom:16px;">Choose how you want to upload (images or PDF up to 5 MB):</p>
+    <div class="picker-options-grid">
+      <button type="button" class="picker-opt-btn" id="picker-opt-camera">
+        <span class="pob-icon">📷</span>
+        <span class="pob-title">Take Photo</span>
+        <span class="pob-sub">Use camera to capture</span>
+      </button>
+      <button type="button" class="picker-opt-btn" id="picker-opt-gallery">
+        <span class="pob-icon">🖼️</span>
+        <span class="pob-title">Photo Gallery</span>
+        <span class="pob-sub">Choose from saved photos</span>
+      </button>
+      <button type="button" class="picker-opt-btn" id="picker-opt-doc">
+        <span class="pob-icon">📄</span>
+        <span class="pob-title">Document / PDF</span>
+        <span class="pob-sub">Browse PDF or file from device</span>
+      </button>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn-secondary" id="picker-opt-cancel" style="width:100%;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/supabase.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf.plugin.autotable.min.js"></script>
 <script src="chart.umd.js"></script>
 <script src="config.js"></script>
+<script src="brand.js"></script>
 <script src="hindi-converter.js"></script>
 <script src="app.js"></script>
 </body>
