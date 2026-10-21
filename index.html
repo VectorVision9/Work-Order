@@ -24,7 +24,7 @@
 <!-- ========================= SPLASH ========================= -->
 <div id="app-splash" class="app-splash-screen">
   <div class="app-splash-content">
-    <img src="branding/app-icon-prepared.png" alt="Logo" class="app-splash-logo">
+    <img src="branding/app-icon-prepared.png" alt="Logo" class="app-splash-logo" onerror="this.onerror=null;this.src='favicon-192.png';">
     <div class="app-splash-spinner"></div>
   </div>
 </div>
@@ -1234,8 +1234,23 @@
 </div>
 
 <script src="vendor/supabase.min.js"></script>
+<script>
+  if (typeof supabase === 'undefined') {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
+  }
+</script>
 <script src="vendor/jspdf.umd.min.js"></script>
+<script>
+  if (typeof jspdf === 'undefined') {
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');
+  }
+</script>
 <script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script>
+  if (typeof jspdf !== 'undefined' && (!jspdf.plugin || !jspdf.plugin.autotable)) {
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"><\/script>');
+  }
+</script>
 <script src="chart.umd.js"></script>
 <script src="config.js"></script>
 <script src="brand.js"></script>
