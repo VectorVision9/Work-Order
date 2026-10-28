@@ -930,13 +930,20 @@
         <!-- Notifications Card -->
         <div class="settings-card" id="set-notif-card">
           <h3>🔔 Notifications</h3>
-          <p class="settings-card-sub">Browser push notification settings</p>
+          <p class="settings-card-sub" id="set-notif-card-sub">Push notification settings</p>
           <div class="settings-row">
             <div>
-              <div style="font-weight:600;font-size:14px;">Push Notifications</div>
+              <div style="font-weight:600;font-size:14px;" id="set-notif-title">Push Notifications</div>
               <div style="font-size:12.5px;color:var(--slate);margin-top:2px;" id="set-notif-desc">Get alerts for task assignments and comments</div>
             </div>
             <button type="button" class="notif-push-toggle" id="settings-push-btn">🔕 Enable push notifications</button>
+          </div>
+          <div class="settings-row" id="settings-test-notif-row" style="margin-top:14px;border-top:1px solid var(--paper-line);padding-top:14px;">
+            <div>
+              <div style="font-weight:600;font-size:14px;">Test Notification</div>
+              <div style="font-size:12.5px;color:var(--slate);margin-top:2px;" id="set-test-notif-desc">Send a test notification to this device</div>
+            </div>
+            <button type="button" class="btn-secondary" id="settings-test-notif-btn">🚀 Send test notification</button>
           </div>
         </div>
 

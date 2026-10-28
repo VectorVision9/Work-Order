@@ -365,6 +365,19 @@ async function onLoggedIn(user) {
     $('boss-view').classList.add('hidden');
     await loadEmployeeData();
   }
+
+  // Handle cold-start notification tap
+  if (pendingNotificationTaskId) {
+    const target = pendingNotificationTaskId;
+    pendingNotificationTaskId = null;
+    setTimeout(() => {
+      if (target === 'dashboard') {
+        showPage('dashboard');
+      } else {
+        openTaskDetail(target, { source: 'notification' });
+      }
+    }, 150);
+  }
 }
 
 // ---------- login ----------
@@ -420,6 +433,7 @@ async function confirmLogout() {
     closeMobileDrawer();
     const pwModal = $('change-pw-modal');
     if (pwModal) pwModal.classList.add('hidden');
+    await cleanupPushOnLogout();
     await sb.auth.signOut();
   }
 }
@@ -3647,6 +3661,187 @@ function pushSupported() {
   return 'serviceWorker' in navigator && 'PushManager' in window;
 }
 
+let currentDeviceToken = null;
+try {
+  currentDeviceToken = localStorage.getItem('fcm_device_token') || null;
+} catch (e) {}
+let nativePushListenersAttached = false;
+let pendingNotificationTaskId = null;
+
+function isNativeApp() {
+  return Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+}
+
+function showPushToast(message) {
+  try {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,0.95);color:#fff;padding:10px 20px;border-radius:24px;font-size:14px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.3);max-width:90%;text-align:center;pointer-events:none;';
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      try { toast.remove(); } catch (e) {}
+    }, 3500);
+  } catch (e) {}
+}
+
+async function sendTokenToDatabase(tokenVal) {
+  if (!tokenVal || !currentUser) return;
+  try {
+    const { error } = await sb.rpc('register_device_token', {
+      p_token: tokenVal,
+      p_platform: 'android'
+    });
+    if (error) {
+      console.error('❌ Failed to register FCM device token via register_device_token RPC:', error.message || error);
+      showPushToast('Push notification registration failed: ' + (error.message || 'Database error'));
+    } else {
+      console.log('✅ FCM device token registered successfully via register_device_token RPC');
+    }
+  } catch (err) {
+    console.error('❌ Error calling register_device_token RPC:', err?.message || err);
+    showPushToast('Push notification registration error: ' + (err?.message || 'Unexpected error'));
+  }
+}
+
+function setupNativePushListeners() {
+  if (nativePushListenersAttached) return;
+  const Push = window.Capacitor?.Plugins?.PushNotifications;
+  if (!Push) return;
+  nativePushListenersAttached = true;
+
+  // On registration / token refresh: register device token via RPC
+  Push.addListener('registration', async (token) => {
+    const tokenVal = token?.value || token;
+    if (!tokenVal || typeof tokenVal !== 'string') return;
+    currentDeviceToken = tokenVal;
+    try {
+      localStorage.setItem('fcm_device_token', tokenVal);
+    } catch (e) {}
+
+    await sendTokenToDatabase(tokenVal);
+    updatePushButtonState();
+  });
+
+  Push.addListener('registrationError', (err) => {
+    console.error('❌ Native push registration error:', err);
+    showPushToast('Push registration error: ' + (err?.error || err?.message || 'Registration failed'));
+    updatePushButtonState();
+  });
+
+  // App is open: do not show duplicate banner; Realtime bell handles it
+  Push.addListener('pushNotificationReceived', (notification) => {
+    if (currentUser) {
+      loadNotifications();
+    }
+  });
+
+  // User tapped notification: open full task detail view or dashboard
+  Push.addListener('pushNotificationActionPerformed', (action) => {
+    const data = action?.notification?.data || {};
+    const taskId = data.task_id || data.taskId || null;
+
+    if (currentUser && currentProfile) {
+      if (taskId) {
+        openTaskDetail(taskId, { source: 'notification' });
+      } else {
+        showPage('dashboard');
+      }
+    } else {
+      pendingNotificationTaskId = taskId || 'dashboard';
+    }
+  });
+}
+
+async function registerNativePush() {
+  if (!isNativeApp()) return false;
+  const Push = window.Capacitor?.Plugins?.PushNotifications;
+  if (!Push) return false;
+
+  setupNativePushListeners();
+
+  try {
+    let perm = await Push.checkPermissions();
+    if (perm?.receive === 'prompt' || perm?.receive === 'prompt-with-rationale') {
+      perm = await Push.requestPermissions();
+    }
+    if (perm?.receive !== 'granted') {
+      console.warn('Native push permission not granted:', perm?.receive);
+      return false;
+    }
+    await Push.register();
+    if (currentDeviceToken) {
+      await sendTokenToDatabase(currentDeviceToken);
+    }
+    return true;
+  } catch (err) {
+    console.error('❌ Error during native push registration:', err);
+    showPushToast('Push registration error: ' + (err?.message || 'Failed to register'));
+    return false;
+  }
+}
+
+async function unregisterNativePush() {
+  const token = currentDeviceToken || (function() {
+    try { return localStorage.getItem('fcm_device_token'); } catch (e) { return null; }
+  })();
+
+  if (token && currentUser) {
+    try {
+      await sb.from('device_tokens').delete().eq('token', token);
+    } catch (err) {
+      console.warn('Error deleting device token:', err);
+    }
+  }
+  currentDeviceToken = null;
+  try {
+    localStorage.removeItem('fcm_device_token');
+  } catch (e) {}
+  updatePushButtonState();
+}
+
+async function cleanupPushOnLogout() {
+  if (isNativeApp()) {
+    await withTimeout(unregisterNativePush(), 3000);
+  }
+}
+
+async function sendTestPushNotification() {
+  if (!currentUser) return;
+  const btn = $('settings-test-notif-btn');
+  const origText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+  }
+
+  try {
+    const { error } = await sb.from('notifications').insert({
+      user_id: currentUser.id,
+      type: 'task_assigned', // Valid existing type matching CHECK constraints
+      title: 'Test notification',
+      message: 'Native push notifications are active on this device!'
+    });
+    if (error) {
+      alert('Could not send test notification: ' + error.message);
+    } else {
+      if (btn) btn.textContent = '✅ Sent!';
+      setTimeout(() => {
+        if (btn) {
+          btn.textContent = origText;
+          btn.disabled = false;
+        }
+      }, 2500);
+      return;
+    }
+  } catch (err) {
+    alert('Error sending test notification: ' + (err?.message || err));
+  }
+  if (btn) {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
+
 async function registerServiceWorker() {
   if (!pushSupported()) return null;
   try {
@@ -3716,13 +3911,45 @@ async function updatePushButtonState() {
   const btn = $('notif-push-btn');
   const setBtn = $('settings-push-btn');
   const setCard = $('set-notif-card');
+  const setTitle = $('set-notif-title');
+  const setDesc = $('set-notif-desc');
+  const setCardSub = $('set-notif-card-sub');
 
+  if (isNativeApp()) {
+    // Native Android mode
+    if (setCard) setCard.classList.remove('hidden');
+    if (btn) btn.classList.add('hidden');
+    if (setCardSub) setCardSub.textContent = 'Android push notification settings';
+    if (setTitle) setTitle.textContent = 'Push notifications on this device';
+
+    const isEnabled = Boolean(currentDeviceToken);
+
+    if (setBtn) {
+      if (isEnabled) {
+        setBtn.textContent = '🔔 Push notifications: On';
+        setBtn.classList.add('enabled');
+      } else {
+        setBtn.textContent = '🔕 Push notifications: Off';
+        setBtn.classList.remove('enabled');
+      }
+    }
+    if (setDesc) {
+      setDesc.textContent = isEnabled
+        ? 'Active on this device (FCM). Tap to turn Off.'
+        : 'Currently disabled on this device. Tap to turn On.';
+    }
+    return;
+  }
+
+  // Web Browser mode
   if (!pushSupported()) {
     if (btn) btn.classList.add('hidden');
     if (setCard) setCard.classList.add('hidden');
     return;
   }
   if (setCard) setCard.classList.remove('hidden');
+  if (setCardSub) setCardSub.textContent = 'Browser push notification settings';
+  if (setTitle) setTitle.textContent = 'Push Notifications';
 
   const sub = await getExistingPushSubscription();
   const isEnabled = Boolean(sub && Notification.permission === 'granted');
@@ -3738,9 +3965,10 @@ async function updatePushButtonState() {
     }
   });
 
-  const setDesc = $('set-notif-desc');
   if (setDesc) {
-    setDesc.textContent = isEnabled ? 'Push notifications are currently active on this device.' : 'Get alerts for task assignments and comments.';
+    setDesc.textContent = isEnabled
+      ? 'Push notifications are currently active on this device.'
+      : 'Get alerts for task assignments and comments.';
   }
 }
 
@@ -3752,12 +3980,21 @@ function withTimeout(promise, ms) {
     new Promise((resolve) => setTimeout(() => resolve(null), ms))
   ]);
 }
+
 async function initPushNotifications() {
   try {
-    await withTimeout(registerServiceWorker(), 4000);
-    await withTimeout(updatePushButtonState(), 4000);
+    if (isNativeApp()) {
+      // Native Android FCM Push
+      setupNativePushListeners();
+      await withTimeout(registerNativePush(), 4000);
+      await withTimeout(updatePushButtonState(), 4000);
+    } else {
+      // Browser Web Push
+      await withTimeout(registerServiceWorker(), 4000);
+      await withTimeout(updatePushButtonState(), 4000);
+    }
   } catch (e) {
-    console.warn('Push notification setup skipped:', e.message);
+    console.warn('Push notification setup skipped:', e?.message || e);
   }
 }
 
@@ -3887,10 +4124,23 @@ $('notif-mark-all-read').addEventListener('click', async (e) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       btn.disabled = true;
-      btn.textContent = 'Setting up...';
-      await enablePushNotifications();
-      await updatePushButtonState();
-      btn.disabled = false;
+      btn.textContent = 'Updating...';
+      try {
+        if (isNativeApp()) {
+          if (currentDeviceToken) {
+            await unregisterNativePush();
+          } else {
+            await registerNativePush();
+          }
+        } else {
+          await enablePushNotifications();
+        }
+        await updatePushButtonState();
+      } catch (err) {
+        console.warn('Error toggling push notifications:', err);
+      } finally {
+        btn.disabled = false;
+      }
     });
   }
 });
@@ -4995,6 +5245,7 @@ function renderSettingsPage() {
 function initSettingsPage() {
   $('settings-open-pw-btn')?.addEventListener('click', openChangePasswordModal);
   $('settings-theme-toggle-btn')?.addEventListener('click', toggleTheme);
+  $('settings-test-notif-btn')?.addEventListener('click', sendTestPushNotification);
 }
 
 initSettingsPage();
