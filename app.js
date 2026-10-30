@@ -346,6 +346,8 @@ async function onLoggedIn(user) {
   startPresenceHeartbeat();
   await loadNotifications();
   startNotificationRealtime();
+  // Silently trigger 30-day notifications auto-cleanup in the background with timeout
+  withTimeout(autoCleanupOldNotifications(), 4000).catch(() => {});
   // fire-and-forget: push setup must never be able to block the rest of
   // the app from loading, even if a browser/permission/network quirk
   // makes some part of it hang or fail
@@ -4122,15 +4124,35 @@ async function notifyBoss(type, title, message, taskId) {
 
 let notificationsCache = [];
 let notifRealtimeChannel = null;
+let notifActiveTab = 'unread'; // 'unread' | 'all'
+let notifDisplayLimit = 50;
 
-async function loadNotifications() {
+async function autoCleanupOldNotifications() {
   if (!currentUser) return;
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30);
+    const cutoffIso = cutoffDate.toISOString();
+    // Delete only current user's notifications older than 30 days
+    await sb
+      .from('notifications')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .lt('created_at', cutoffIso);
+  } catch (err) {
+    console.warn('Auto-cleanup of old notifications skipped:', err?.message || err);
+  }
+}
+
+async function loadNotifications(limit = notifDisplayLimit) {
+  if (!currentUser) return;
+  const fetchLimit = Math.max(limit, notifDisplayLimit, 50);
   const { data, error } = await sb
     .from('notifications')
     .select('*')
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false })
-    .limit(40);
+    .limit(fetchLimit);
   if (error) {
     console.error('Could not load notifications (has supabase-migration-v7.sql been run?):', error.message);
     return;
@@ -4156,33 +4178,106 @@ function timeAgo(dateStr) {
   return formatDate(dateStr.slice(0, 10));
 }
 
+function getNotificationDayGroup(dateStr) {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  if (isSameDay(d, today)) return 'Today';
+  if (isSameDay(d, yesterday)) return 'Yesterday';
+  return formatDate(dateStr.slice(0, 10));
+}
+
 function renderNotificationBell() {
   const badge = $('notif-badge');
   const list = $('notif-list');
+  const unreadTabCount = $('notif-tab-unread-count');
+  const footer = $('notif-footer');
   if (!badge || !list) return;
 
-  const unread = notificationsCache.filter(n => !n.read).length;
-  badge.textContent = unread > 9 ? '9+' : String(unread);
-  badge.classList.toggle('hidden', unread === 0);
+  const unreadCount = notificationsCache.filter(n => !n.read).length;
 
-  if (notificationsCache.length === 0) {
-    list.innerHTML = '<p class="notif-empty">No notifications yet.</p>';
+  // Bell badge: up to 99, 99+ above that, hidden on 0
+  if (unreadCount === 0) {
+    badge.textContent = '0';
+    badge.classList.add('hidden');
+  } else if (unreadCount > 99) {
+    badge.textContent = '99+';
+    badge.classList.remove('hidden');
+  } else {
+    badge.textContent = String(unreadCount);
+    badge.classList.remove('hidden');
+  }
+
+  // Update tab indicator count
+  if (unreadTabCount) {
+    unreadTabCount.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    unreadTabCount.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+  }
+
+  // Filter based on active tab
+  let filtered = notificationsCache;
+  if (notifActiveTab === 'unread') {
+    filtered = filtered.filter(n => !n.read);
+  }
+
+  // Limit items shown according to pagination
+  const visibleItems = filtered.slice(0, notifDisplayLimit);
+
+  if (footer) {
+    footer.classList.toggle('hidden', filtered.length <= notifDisplayLimit);
+  }
+
+  if (visibleItems.length === 0) {
+    const emptyMsg = notifActiveTab === 'unread' ? 'No unread notifications.' : 'No notifications yet.';
+    list.innerHTML = `<p class="notif-empty">${emptyMsg}</p>`;
     return;
   }
 
-  list.innerHTML = notificationsCache.map(n => `
-    <div class="notif-row ${n.read ? '' : 'unread'}" data-notif-id="${n.id}" data-task-id="${n.task_id || ''}">
-      <span class="notif-icon">${NOTIF_ICON[n.type] || '🔔'}</span>
-      <div class="notif-info">
-        <div class="notif-title">${escapeHtml(n.title)}</div>
-        ${n.message ? `<div class="notif-message">${escapeHtml(n.message)}</div>` : ''}
-        <div class="notif-time">${timeAgo(n.created_at)}</div>
+  // Group visible items by day
+  const groups = [];
+  const map = new Map();
+  visibleItems.forEach(item => {
+    const groupName = getNotificationDayGroup(item.created_at);
+    if (!map.has(groupName)) {
+      const g = { label: groupName, items: [] };
+      map.set(groupName, g);
+      groups.push(g);
+    }
+    map.get(groupName).items.push(item);
+  });
+
+  list.innerHTML = groups.map(g => `
+    <div class="notif-day-group">
+      <div class="notif-day-header">${escapeHtml(g.label)}</div>
+      <div class="notif-day-items">
+        ${g.items.map(n => `
+          <div class="notif-row ${n.read ? '' : 'unread'}" data-notif-id="${n.id}" data-task-id="${n.task_id || ''}" role="button" tabindex="0">
+            <span class="notif-icon">${NOTIF_ICON[n.type] || '🔔'}</span>
+            <div class="notif-info">
+              <div class="notif-title">${escapeHtml(n.title)}</div>
+              ${n.message ? `<div class="notif-message">${escapeHtml(n.message)}</div>` : ''}
+              <div class="notif-time">${timeAgo(n.created_at)}</div>
+            </div>
+            <button type="button" class="notif-delete-btn" data-delete-id="${n.id}" title="Delete notification" aria-label="Delete notification">×</button>
+          </div>
+        `).join('')}
       </div>
     </div>
   `).join('');
 
+  // Attach item tap listeners
   list.querySelectorAll('.notif-row').forEach(row => {
-    row.addEventListener('click', async () => {
+    row.addEventListener('click', async (e) => {
+      // Don't trigger row click if delete button was tapped
+      if (e.target.closest('.notif-delete-btn')) return;
+
       const id = row.dataset.notifId;
       const taskId = row.dataset.taskId;
       const n = notificationsCache.find(x => x.id === id);
@@ -4191,30 +4286,90 @@ function renderNotificationBell() {
         renderNotificationBell();
         await sb.from('notifications').update({ read: true }).eq('id', id);
       }
+      $('notif-panel')?.classList.add('hidden');
       if (taskId) {
-        $('notif-panel').classList.add('hidden');
         openTaskDetail(taskId, { source: 'notification' });
       }
     });
   });
+
+  // Attach individual delete listeners
+  list.querySelectorAll('.notif-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteId;
+      if (!id) return;
+      notificationsCache = notificationsCache.filter(x => x.id !== id);
+      renderNotificationBell();
+      await sb.from('notifications').delete().eq('id', id).eq('user_id', currentUser.id);
+    });
+  });
 }
 
-$('notif-bell-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  $('notif-panel').classList.toggle('hidden');
-});
-document.addEventListener('click', (e) => {
-  const wrap = document.querySelector('.notif-bell-wrap');
-  if (wrap && !wrap.contains(e.target)) $('notif-panel').classList.add('hidden');
-});
-$('notif-mark-all-read').addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const unreadIds = notificationsCache.filter(n => !n.read).map(n => n.id);
-  if (unreadIds.length === 0) return;
-  notificationsCache.forEach(n => { n.read = true; });
-  renderNotificationBell();
-  await sb.from('notifications').update({ read: true }).in('id', unreadIds);
-});
+function initNotificationBell() {
+  const bellBtn = $('notif-bell-btn');
+  const panel = $('notif-panel');
+  const markAllBtn = $('notif-mark-all-read');
+  const clearAllBtn = $('notif-clear-all');
+  const tabUnread = $('notif-tab-unread');
+  const tabAll = $('notif-tab-all');
+  const loadMoreBtn = $('notif-load-more-btn');
+
+  bellBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel?.classList.toggle('hidden');
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = document.querySelector('.notif-bell-wrap');
+    if (wrap && !wrap.contains(e.target)) panel?.classList.add('hidden');
+  });
+
+  tabUnread?.addEventListener('click', () => {
+    notifActiveTab = 'unread';
+    tabUnread.classList.add('active');
+    tabUnread.setAttribute('aria-selected', 'true');
+    tabAll?.classList.remove('active');
+    tabAll?.setAttribute('aria-selected', 'false');
+    renderNotificationBell();
+  });
+
+  tabAll?.addEventListener('click', () => {
+    notifActiveTab = 'all';
+    tabAll.classList.add('active');
+    tabAll.setAttribute('aria-selected', 'true');
+    tabUnread?.classList.remove('active');
+    tabUnread?.setAttribute('aria-selected', 'false');
+    renderNotificationBell();
+  });
+
+  markAllBtn?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const unreadIds = notificationsCache.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+    notificationsCache.forEach(n => { n.read = true; });
+    renderNotificationBell();
+    await sb.from('notifications').update({ read: true }).in('id', unreadIds).eq('user_id', currentUser.id);
+  });
+
+  clearAllBtn?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!currentUser || notificationsCache.length === 0) return;
+    const confirmed = confirm('Clear all notifications? This cannot be undone.');
+    if (!confirmed) return;
+    notificationsCache = [];
+    renderNotificationBell();
+    await sb.from('notifications').delete().eq('user_id', currentUser.id);
+  });
+
+  loadMoreBtn?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    notifDisplayLimit += 50;
+    await loadNotifications(notifDisplayLimit);
+  });
+}
+
+initNotificationBell();
 
 ['notif-push-btn', 'settings-push-btn'].forEach(id => {
   const btn = $(id);

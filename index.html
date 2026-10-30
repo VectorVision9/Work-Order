@@ -184,14 +184,24 @@
         <div class="topbar-right">
           <button id="fullscreen-btn" title="Toggle fullscreen">⛶</button>
           <div class="notif-bell-wrap">
-            <button id="notif-bell-btn" title="Notifications">🔔<span class="notif-badge hidden" id="notif-badge">0</span></button>
+            <button id="notif-bell-btn" title="Notifications" aria-label="Notifications">🔔<span class="notif-badge hidden" id="notif-badge">0</span></button>
             <div class="notif-panel hidden" id="notif-panel">
               <div class="notif-panel-header">
                 <h3>🔔 Notifications</h3>
-                <button type="button" class="btn-text-small" id="notif-mark-all-read">Mark all read</button>
+                <div class="notif-panel-actions">
+                  <button type="button" class="btn-text-small" id="notif-mark-all-read" title="Mark all as read">Mark all read</button>
+                  <button type="button" class="btn-text-small notif-clear-btn" id="notif-clear-all" title="Clear all notifications">Clear all</button>
+                </div>
+              </div>
+              <div class="notif-tabs" role="tablist">
+                <button type="button" class="notif-tab active" id="notif-tab-unread" data-tab="unread" role="tab" aria-selected="true">Unread <span class="notif-tab-count" id="notif-tab-unread-count"></span></button>
+                <button type="button" class="notif-tab" id="notif-tab-all" data-tab="all" role="tab" aria-selected="false">All</button>
               </div>
               <button type="button" class="notif-push-toggle" id="notif-push-btn">🔕 Enable push notifications</button>
               <div class="notif-list" id="notif-list"></div>
+              <div class="notif-footer hidden" id="notif-footer">
+                <button type="button" class="notif-load-more-btn" id="notif-load-more-btn">Load more</button>
+              </div>
             </div>
           </div>
           <button id="theme-toggle-btn" title="Switch theme">🌙</button>
