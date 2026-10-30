@@ -1758,6 +1758,47 @@ $('reassign-form').addEventListener('submit', async (e) => {
     actor: currentUser.id
   });
 
+  // Reassign notifications
+  const actorName = currentProfile?.full_name || 'Someone';
+  const taskTitle = taskBefore?.title || 'Task';
+  const findEmpName = (id) => {
+    if (!id) return 'an employee';
+    if (currentUser && id === currentUser.id) return currentProfile?.full_name || 'You';
+    if (cachedBossId && id === cachedBossId) return cachedBossName || 'Boss';
+    if (taskBefore && taskBefore.assigned_to === id && taskBefore.employee?.full_name) {
+      return taskBefore.employee.full_name;
+    }
+    const list = (employeesCache && employeesCache.length > 0) ? employeesCache : (employeeDirectoryCache || []);
+    const match = list.find(e => e.id === id);
+    if (match) return match.full_name;
+    return 'an employee';
+  };
+  const oldEmpName = findEmpName(fromEmp);
+  const newEmpName = findEmpName(newAssignee);
+
+  // 1. Notify the new assignee (never notify the person who performed the action)
+  if (newAssignee && newAssignee !== currentUser.id) {
+    await createNotification(
+      newAssignee,
+      'task_reassigned',
+      'Task reassigned to you',
+      `${actorName} reassigned '${taskTitle}' to you`,
+      taskId
+    );
+  }
+
+  // 2. Notify the Boss (if the Boss is not the one who performed the action)
+  const bossId = await getBossId();
+  if (bossId && bossId !== currentUser.id) {
+    await createNotification(
+      bossId,
+      'task_reassigned',
+      'Task reassigned',
+      `${actorName} reassigned '${taskTitle}' from ${oldEmpName} to ${newEmpName}`,
+      taskId
+    );
+  }
+
   $('reassign-modal').classList.add('hidden');
   await refreshAfterTaskAction();
   if (currentDetailTaskId === taskId) {
@@ -3799,9 +3840,31 @@ async function unregisterNativePush() {
   updatePushButtonState();
 }
 
+async function cleanupBrowserPushOnLogout() {
+  if (!pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (!reg) return;
+    const sub = await reg.pushManager?.getSubscription();
+    if (!sub) return;
+    const endpoint = sub.endpoint;
+    if (endpoint && currentUser) {
+      const { error } = await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if (error) {
+        console.warn('Error deleting push subscription on logout:', error.message);
+      }
+    }
+    await sub.unsubscribe();
+  } catch (e) {
+    console.warn('Error during browser push logout cleanup:', e?.message || e);
+  }
+}
+
 async function cleanupPushOnLogout() {
   if (isNativeApp()) {
     await withTimeout(unregisterNativePush(), 3000);
+  } else {
+    await withTimeout(cleanupBrowserPushOnLogout(), 3000);
   }
 }
 
@@ -3893,15 +3956,14 @@ async function enablePushNotifications() {
   }
 
   const json = sub.toJSON();
-  const { error } = await sb.from('push_subscriptions').upsert({
-    user_id: currentUser.id,
-    endpoint: json.endpoint,
-    p256dh: json.keys.p256dh,
-    auth: json.keys.auth
-  }, { onConflict: 'endpoint' });
+  const { error } = await sb.rpc('register_push_subscription', {
+    p_endpoint: json.endpoint,
+    p_p256dh: json.keys?.p256dh,
+    p_auth: json.keys?.auth
+  });
 
   if (error) {
-    console.error('Could not save push subscription (has supabase-migration-v8.sql been run?):', error.message);
+    console.error('Could not save push subscription via RPC (has supabase-migration-v12.sql been run?):', error.message);
     return false;
   }
   return true;
@@ -3981,6 +4043,41 @@ function withTimeout(promise, ms) {
   ]);
 }
 
+async function syncBrowserPushOnLogin() {
+  if (isNativeApp() || !pushSupported()) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (!reg) return;
+    let sub = await reg.pushManager?.getSubscription();
+    if (!sub && typeof VAPID_PUBLIC_KEY !== 'undefined' && VAPID_PUBLIC_KEY) {
+      try {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      } catch (subErr) {
+        // stay silent if subscribing fails
+      }
+    }
+    if (!sub) return;
+    const json = sub.toJSON();
+    if (!json?.endpoint || !json?.keys) return;
+    const { error } = await sb.rpc('register_push_subscription', {
+      p_endpoint: json.endpoint,
+      p_p256dh: json.keys.p256dh,
+      p_auth: json.keys.auth
+    });
+    if (error) {
+      console.warn('Could not re-sync browser push subscription on login:', error.message);
+    } else {
+      console.log('Browser push subscription re-synced for current user');
+    }
+  } catch (e) {
+    console.warn('Error syncing browser push subscription on login:', e?.message || e);
+  }
+}
+
 async function initPushNotifications() {
   try {
     if (isNativeApp()) {
@@ -3991,6 +4088,7 @@ async function initPushNotifications() {
     } else {
       // Browser Web Push
       await withTimeout(registerServiceWorker(), 4000);
+      await withTimeout(syncBrowserPushOnLogin(), 4000);
       await withTimeout(updatePushButtonState(), 4000);
     }
   } catch (e) {
@@ -4042,7 +4140,7 @@ async function loadNotifications() {
 }
 
 const NOTIF_ICON = {
-  task_assigned: '🔴', task_accepted: '🟢', task_started: '🟡', task_completed: '🟢',
+  task_assigned: '🔴', task_reassigned: '🔄', task_accepted: '🟢', task_started: '🟡', task_completed: '🟢',
   comment: '💬', deadline_tomorrow: '🟡', overdue: '⚠️', employee_added: '🔵'
 };
 
