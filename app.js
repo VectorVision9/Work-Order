@@ -433,6 +433,8 @@ $('signup-form').addEventListener('submit', async (e) => {
 async function confirmLogout() {
   if (confirm('Are you sure you want to log out?')) {
     closeMobileDrawer();
+    closeEmployeeDrawer();
+    $('notif-panel')?.classList.add('hidden');
     const pwModal = $('change-pw-modal');
     if (pwModal) pwModal.classList.add('hidden');
     await cleanupPushOnLogout();
@@ -2103,12 +2105,59 @@ function openEmployeeDrawer(emp) {
   $('drawer-productivity').textContent = `${productivity}%`;
 
   $('profile-drawer-backdrop').classList.remove('hidden');
+
+  // Push state for mobile browser Back button support (without changing URL)
+  try {
+    history.pushState({ modal: 'profile-drawer' }, '');
+  } catch (e) {}
 }
 
-$('drawer-close').addEventListener('click', () => $('profile-drawer-backdrop').classList.add('hidden'));
-$('profile-drawer-backdrop').addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) $('profile-drawer-backdrop').classList.add('hidden');
+function closeEmployeeDrawer() {
+  const backdrop = $('profile-drawer-backdrop');
+  if (backdrop && !backdrop.classList.contains('hidden')) {
+    backdrop.classList.add('hidden');
+    $('profile-drawer')?.classList.remove('open');
+  }
+}
+
+$('drawer-close')?.addEventListener('click', closeEmployeeDrawer);
+$('profile-drawer-backdrop')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeEmployeeDrawer();
 });
+
+// Touch swipe-to-right gesture to close drawer on mobile
+(function initDrawerSwipe() {
+  const drawer = $('profile-drawer');
+  if (!drawer) return;
+  let startX = 0;
+  let startY = 0;
+  let isSwiping = false;
+
+  drawer.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    isSwiping = true;
+  }, { passive: true });
+
+  drawer.addEventListener('touchmove', (e) => {
+    if (!isSwiping || e.touches.length !== 1) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = currentX - startX;
+    const diffY = Math.abs(currentY - startY);
+
+    // If swiped right by more than 60px and horizontal movement is dominant
+    if (diffX > 60 && diffX > diffY) {
+      isSwiping = false;
+      closeEmployeeDrawer();
+    }
+  }, { passive: true });
+
+  drawer.addEventListener('touchend', () => {
+    isSwiping = false;
+  }, { passive: true });
+})();
 
 $('drawer-attendance-save').addEventListener('click', async () => {
   const msg = $('drawer-attendance-msg');
@@ -3549,66 +3598,92 @@ function renderTeamStatus() {
 // Transcribed from the official 2026 public/restricted holiday circular.
 // When next year's circular comes out, add a new year block here.
 // =========================================================
-const HOLIDAYS_2026 = [
-  // ---- Public holidays (सार्वजनिक अवकाश) ----
-  { date: '2026-01-03', name: 'मो. हजरत अली का जन्म दिवस', type: 'public' },
-  { date: '2026-01-26', name: 'गणतन्त्र दिवस', type: 'public' },
-  { date: '2026-02-15', name: 'महाशिवरात्रि', type: 'public' },
-  { date: '2026-03-02', name: 'होलिका दहन', type: 'public' },
-  { date: '2026-03-04', name: 'होली', type: 'public' },
-  { date: '2026-03-21', name: 'ईद-उल-फितर', type: 'public' },
-  { date: '2026-03-26', name: 'रामनवमी', type: 'public' },
-  { date: '2026-03-31', name: 'महावीर जयन्ती', type: 'public' },
-  { date: '2026-04-03', name: 'गुड फ्राइडे', type: 'public' },
-  { date: '2026-04-14', name: 'डॉ. भीमराव अम्बेडकर जी का जन्म दिवस', type: 'public' },
-  { date: '2026-05-01', name: 'बुद्ध पूर्णिमा', type: 'public' },
-  { date: '2026-05-27', name: 'ईद-उल-जुहा (बकरीद)', type: 'public' },
-  { date: '2026-06-26', name: 'मोहर्रम', type: 'public' },
-  { date: '2026-08-15', name: 'स्वतंत्रता दिवस', type: 'public' },
-  { date: '2026-08-26', name: 'ईद-ए-मिलाद/बारावफात', type: 'public' },
-  { date: '2026-08-28', name: 'रक्षा बन्धन', type: 'public' },
-  { date: '2026-09-04', name: 'जन्माष्टमी', type: 'public' },
-  { date: '2026-10-02', name: 'महात्मा गाँधी जयन्ती', type: 'public' },
-  { date: '2026-10-20', name: 'दशहरा महानवमी/विजयदशमी', type: 'public' },
-  { date: '2026-11-08', name: 'दीपावली', type: 'public' },
-  { date: '2026-11-09', name: 'गोवर्धन पूजा', type: 'public' },
-  { date: '2026-11-11', name: 'भैया दूज/चित्रगुप्त जयन्ती', type: 'public' },
-  { date: '2026-11-24', name: 'गुरूनानक जयन्ती/कार्तिक पूर्णिमा', type: 'public' },
-  { date: '2026-12-25', name: 'क्रिसमस डे', type: 'public' },
+// =========================================================
+// DYNAMIC HOLIDAY CALENDAR (Supabase-backed with offline localStorage cache)
+// =========================================================
+const holidaysCacheByYear = {}; // in-memory cache: { [year]: [ { id, date, name, type, repeats_yearly } ] }
 
-  // ---- Restricted holidays (निर्बन्धित अवकाश) ----
-  { date: '2026-01-01', name: 'नववर्ष दिवस', type: 'restricted' },
-  { date: '2026-01-14', name: 'मकर संक्रान्ति', type: 'restricted' },
-  { date: '2026-01-23', name: 'वसन्त पंचमी', type: 'restricted' },
-  { date: '2026-01-24', name: 'जननायक कर्पूरी ठाकुर का जन्म दिवस', type: 'restricted' },
-  { date: '2026-02-01', name: 'सन्त रविदास जयन्ती', type: 'restricted' },
-  { date: '2026-02-04', name: 'शवे बरात', type: 'restricted' },
-  { date: '2026-03-05', name: 'होली (द्वितीय दिवस)', type: 'restricted' },
-  { date: '2026-03-13', name: 'जमात-उल-विदा (अलविदा)', type: 'restricted' },
-  { date: '2026-03-19', name: 'चेटीचंद जयन्ती', type: 'restricted' },
-  { date: '2026-03-22', name: 'ईद-उल-फितर (द्वितीय दिवस)', type: 'restricted' },
-  { date: '2026-04-04', name: 'ईस्टर सैटरडे', type: 'restricted' },
-  { date: '2026-04-05', name: 'महर्षि कश्यप एवं महाराजा निषाद राज गुह्य जयन्ती', type: 'restricted' },
-  { date: '2026-04-06', name: 'ईस्टर मन्डे', type: 'restricted' },
-  { date: '2026-04-17', name: 'चन्द्रशेखर जयन्ती', type: 'restricted' },
-  { date: '2026-04-19', name: 'परशुराम जयन्ती', type: 'restricted' },
-  { date: '2026-05-09', name: 'लोकनायक महाराणा प्रताप जयन्ती', type: 'restricted' },
-  { date: '2026-05-28', name: 'ईद-उल-जुहा (बकरीद, द्वितीय दिवस)', type: 'restricted' },
-  { date: '2026-06-25', name: 'मोहर्रम (प्रथम दिवस)', type: 'restricted' },
-  { date: '2026-08-04', name: 'चेहल्लुम', type: 'restricted' },
-  { date: '2026-09-17', name: 'विश्वकर्मा पूजा', type: 'restricted' },
-  { date: '2026-09-25', name: 'अनन्त चतुर्दशी', type: 'restricted' },
-  { date: '2026-10-11', name: 'महाराजा अग्रसेन जयन्ती', type: 'restricted' },
-  { date: '2026-10-19', name: 'दशहरा (महाष्टमी)', type: 'restricted' },
-  { date: '2026-10-26', name: 'महर्षि वाल्मीकि जयन्ती', type: 'restricted' },
-  { date: '2026-10-31', name: 'सरदार वल्लभ भाई पटेल एवं आचार्य नरेन्द्र देव जयन्ती', type: 'restricted' },
-  { date: '2026-11-08', name: 'नरक चतुर्दशी', type: 'restricted' },
-  { date: '2026-11-15', name: 'छठ पूजा पर्व', type: 'restricted' },
-  { date: '2026-11-16', name: 'वीरांगना उदा देवी शहीद दिवस', type: 'restricted' },
-  { date: '2026-12-16', name: 'हजरत ख्वाजा मुइनुद्दीन चिश्ती की उर्स/अजमेरी गरीब नवाज जयन्ती', type: 'restricted' },
-  { date: '2026-12-23', name: 'चौधरी चरण सिंह का जन्म दिवस', type: 'restricted' },
-  { date: '2026-12-24', name: 'क्रिसमस ईव', type: 'restricted' }
-];
+async function loadHolidaysForYear(year, forceRefresh = false) {
+  const y = Number(year);
+  if (!y || isNaN(y)) return [];
+
+  // Check in-memory cache unless forceRefresh
+  if (!forceRefresh && holidaysCacheByYear[y] && Array.isArray(holidaysCacheByYear[y])) {
+    return holidaysCacheByYear[y];
+  }
+
+  // Check localStorage cache for instant offline access
+  const storageKey = 'holidays_' + y;
+  if (!forceRefresh) {
+    try {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          holidaysCacheByYear[y] = parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // If we already have memory cache and not forcing refresh, return it
+  if (!forceRefresh && holidaysCacheByYear[y] && holidaysCacheByYear[y].length > 0) {
+    return holidaysCacheByYear[y];
+  }
+
+  // Fetch from Supabase
+  try {
+    const startDate = `${y}-01-01`;
+    const endDate = `${y}-12-31`;
+    const { data, error } = await sb
+      .from('holidays')
+      .select('id, holiday_date, name, type, repeats_yearly')
+      .gte('holiday_date', startDate)
+      .lte('holiday_date', endDate)
+      .order('holiday_date', { ascending: true });
+
+    if (error) {
+      console.warn(`Could not load holidays for ${y} from Supabase:`, error.message);
+      return holidaysCacheByYear[y] || [];
+    }
+
+    const normalized = (data || []).map(r => ({
+      id: r.id,
+      date: r.holiday_date,
+      name: r.name,
+      type: r.type || 'gazetted',
+      repeats_yearly: Boolean(r.repeats_yearly)
+    }));
+
+    holidaysCacheByYear[y] = normalized;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(normalized));
+    } catch (e) {}
+
+    return normalized;
+  } catch (err) {
+    console.error(`Error loading holidays for ${y}:`, err);
+    return holidaysCacheByYear[y] || [];
+  }
+}
+
+function getHolidaysForYear(year) {
+  const y = Number(year);
+  if (holidaysCacheByYear[y] && Array.isArray(holidaysCacheByYear[y])) {
+    return holidaysCacheByYear[y];
+  }
+  try {
+    const cached = localStorage.getItem('holidays_' + y);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        holidaysCacheByYear[y] = parsed;
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return [];
+}
 
 function getWeeklyOffs(year) {
   const offs = [];
@@ -3632,34 +3707,69 @@ function getWeeklyOffs(year) {
 }
 
 function getAllHolidays(year) {
-  const fixed = HOLIDAYS_2026.filter(h => h.date.startsWith(String(year)));
+  const y = Number(year);
+  const fixed = getHolidaysForYear(y);
   const known = new Set(fixed.map(h => h.date));
-  const weekly = getWeeklyOffs(year).filter(h => !known.has(h.date));
+  const weekly = getWeeklyOffs(y).filter(h => !known.has(h.date));
   return [...fixed, ...weekly].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 let holidayListExpanded = false;
-function renderHolidayWidget() {
+async function renderHolidayWidget() {
   const isBoss = currentProfile?.role === 'boss';
   const nextEl = $(isBoss ? 'holiday-next-boss' : 'holiday-next');
   const listEl = $(isBoss ? 'holiday-list-boss' : 'holiday-list');
   if (!nextEl || !listEl) return;
 
-  const todayStr = toDateStr(new Date());
-  const year = new Date().getFullYear();
+  const today = new Date();
+  const todayStr = toDateStr(today);
+  const year = today.getFullYear();
 
-  let all = getAllHolidays(year);
-  // roll into next year too, near year-end, so "next holiday" doesn't run dry in December
-  if (new Date().getMonth() >= 10) {
-    all = all.concat(getAllHolidays(year + 1));
+  // Set dynamic year tags on boss and employee dashboard cards
+  const tagBoss = $('holiday-year-tag-boss');
+  const tagEmp = $('holiday-year-tag');
+  if (tagBoss) tagBoss.textContent = year;
+  if (tagEmp) tagEmp.textContent = year;
+
+  await loadHolidaysForYear(year);
+  const curDbHolidays = getHolidaysForYear(year);
+
+  // If no holidays have been added for this year in the database:
+  if (curDbHolidays.length === 0) {
+    let emptyHtml = `<div class="hn-name" style="font-size:13px;color:var(--slate);line-height:1.4;">Holiday list for ${year} not added yet.</div>`;
+    if (isBoss) {
+      emptyHtml += `<button type="button" class="btn-secondary btn-sm" id="${isBoss ? 'widget-add-holidays-boss' : 'widget-add-holidays'}" style="margin-top:8px;">➕ Add holidays</button>`;
+    }
+    nextEl.innerHTML = emptyHtml;
+    listEl.innerHTML = '';
+    const addBtn = $(isBoss ? 'widget-add-holidays-boss' : 'widget-add-holidays');
+    if (addBtn) {
+      addBtn.onclick = () => openManageHolidaysModal(year);
+    }
+    const viewAllBtn = $(isBoss ? 'holiday-view-all-btn-boss' : 'holiday-view-all-btn');
+    if (viewAllBtn) viewAllBtn.textContent = 'View Full Calendar →';
+    return;
   }
 
-  const upcoming = all.filter(h => h.date >= todayStr);
+  let all = getAllHolidays(year);
 
-  if (upcoming.length === 0) {
-    nextEl.innerHTML = 'No upcoming holidays found.';
+  // Only gazetted and company holidays count for "next holiday in N days"
+  const isQualifyingHoliday = h => h.type === 'gazetted' || h.type === 'company';
+  let qualifyingUpcoming = all.filter(h => isQualifyingHoliday(h) && h.date >= todayStr);
+
+  // Across year boundary: if no more qualifying holidays left in current year or late in year (Nov/Dec), load next year
+  if (qualifyingUpcoming.length === 0 || today.getMonth() >= 10) {
+    await loadHolidaysForYear(year + 1);
+    all = all.concat(getAllHolidays(year + 1));
+    qualifyingUpcoming = all.filter(h => isQualifyingHoliday(h) && h.date >= todayStr);
+  }
+
+  const allUpcoming = all.filter(h => h.date >= todayStr);
+
+  if (qualifyingUpcoming.length === 0) {
+    nextEl.innerHTML = '<div class="hn-name" style="font-size:13px;color:var(--slate);">No upcoming gazetted or company holidays.</div>';
   } else {
-    const next = upcoming[0];
+    const next = qualifyingUpcoming[0];
     const days = Math.round((parseDateStr(next.date) - parseDateStr(todayStr)) / (1000 * 60 * 60 * 24));
     const dayLabel = days === 0 ? 'Today! 🎊' : days === 1 ? 'Tomorrow' : `in ${days} days`;
     nextEl.innerHTML = `
@@ -3669,22 +3779,968 @@ function renderHolidayWidget() {
     `;
   }
 
-  const typeLabel = { public: 'Public', restricted: 'Restricted', weekly: 'Weekly Off' };
+  const typeLabel = {
+    gazetted: 'Gazetted',
+    restricted: 'Optional',
+    company: 'Company',
+    weekly: 'Weekly Off',
+    public: 'Gazetted'
+  };
   const showAll = holidayListExpanded;
-  const visible = showAll ? upcoming.slice(0, 40) : upcoming.slice(0, 4);
+  const visible = showAll ? allUpcoming.slice(0, 40) : allUpcoming.slice(0, 4);
 
   listEl.innerHTML = visible.map(h => `
     <div class="holiday-row ${h.type}">
       <div class="hr-date">${formatDate(h.date)}</div>
       <div class="hr-info">
         <div class="hr-name" title="${escapeHtml(h.name)}">${escapeHtml(h.name)}</div>
-        <div class="hr-type">${typeLabel[h.type] || h.type}</div>
+        <div class="hr-type"><span class="hbadge hbadge-${h.type}">${typeLabel[h.type] || h.type}</span></div>
       </div>
     </div>
   `).join('');
 
   const btn = $(isBoss ? 'holiday-view-all-btn-boss' : 'holiday-view-all-btn');
   if (btn) btn.textContent = 'View Full Calendar →';
+}
+
+// =========================================================
+// BOSS MANAGE HOLIDAYS MODAL CONTROLLER
+// =========================================================
+let mhSelectedYear = new Date().getFullYear();
+let mhHolidaysList = [];
+
+function populateManageHolidaysYearSelect() {
+  const sel = $('mh-year-select');
+  if (!sel) return;
+  if (sel.children.length === 0) {
+    let html = '';
+    for (let y = 2024; y <= 2035; y++) {
+      html += `<option value="${y}">${y}</option>`;
+    }
+    sel.innerHTML = html;
+  }
+  sel.value = String(mhSelectedYear);
+}
+
+async function openManageHolidaysModal(year) {
+  if (currentProfile?.role !== 'boss') {
+    alert('Holiday management is restricted to administrators.');
+    return;
+  }
+  if (year) mhSelectedYear = Number(year);
+  else mhSelectedYear = calCurrentYear || new Date().getFullYear();
+
+  populateManageHolidaysYearSelect();
+
+  // Reset sub-panels
+  $('mh-add-section')?.classList.add('hidden');
+  $('mh-copy-section')?.classList.add('hidden');
+  $('mh-paste-section')?.classList.add('hidden');
+
+  $('manage-holidays-modal')?.classList.remove('hidden');
+
+  try {
+    history.pushState({ modal: 'manage-holidays' }, '');
+  } catch (e) {}
+
+  await loadAndRenderManageHolidays(mhSelectedYear);
+}
+
+function closeManageHolidaysModal() {
+  $('manage-holidays-modal')?.classList.add('hidden');
+  $('mh-add-section')?.classList.add('hidden');
+  $('mh-copy-section')?.classList.add('hidden');
+  $('mh-paste-section')?.classList.add('hidden');
+  resetHolidayAddForm();
+}
+
+async function loadAndRenderManageHolidays(year) {
+  mhSelectedYear = Number(year);
+  populateManageHolidaysYearSelect();
+
+  const prevYear = mhSelectedYear - 1;
+  const prevLabel = $('mh-prev-year-label');
+  if (prevLabel) prevLabel.textContent = prevYear;
+  const copyFromLabel = $('mh-copy-from-year');
+  if (copyFromLabel) copyFromLabel.textContent = prevYear;
+  const copyToLabel = $('mh-copy-to-year');
+  if (copyToLabel) copyToLabel.textContent = mhSelectedYear;
+  const deleteYearLabel = $('mh-delete-year-label');
+  if (deleteYearLabel) deleteYearLabel.textContent = mhSelectedYear;
+
+  const data = await loadHolidaysForYear(mhSelectedYear, true);
+  mhHolidaysList = data || [];
+
+  renderManageHolidaysTable();
+}
+
+function renderManageHolidaysTable() {
+  const tbody = $('mh-tbody');
+  const emptyEl = $('mh-empty-msg');
+  const countBadge = $('mh-count-badge');
+  if (!tbody) return;
+
+  const searchVal = ($('mh-search-input')?.value || '').trim().toLowerCase();
+  const typeFilter = $('mh-filter-type')?.value || 'all';
+
+  let filtered = mhHolidaysList;
+  if (typeFilter !== 'all') {
+    filtered = filtered.filter(h => h.type === typeFilter);
+  }
+  if (searchVal) {
+    filtered = filtered.filter(h => h.name.toLowerCase().includes(searchVal) || h.date.includes(searchVal));
+  }
+
+  if (countBadge) {
+    countBadge.textContent = `${mhHolidaysList.length} holiday${mhHolidaysList.length === 1 ? '' : 's'} in ${mhSelectedYear}`;
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyEl) emptyEl.classList.add('hidden');
+
+  const dows = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const typeLabels = { gazetted: 'Gazetted', restricted: 'Restricted', company: 'Company' };
+
+  tbody.innerHTML = filtered.map(h => {
+    const d = parseDateStr(h.date);
+    const dow = dows[d.getDay()] || '';
+    const repeatsHtml = h.repeats_yearly
+      ? '<span style="color:#10B981;font-weight:600;">✓ Yearly</span>'
+      : '<span style="color:var(--slate);">No</span>';
+
+    return `
+      <tr>
+        <td style="font-weight:600;white-space:nowrap;">${h.date}</td>
+        <td style="color:var(--slate);white-space:nowrap;">${dow}</td>
+        <td style="font-weight:600;">${escapeHtml(h.name)}</td>
+        <td><span class="hbadge hbadge-${h.type}">${typeLabels[h.type] || h.type}</span></td>
+        <td>${repeatsHtml}</td>
+        <td style="text-align:right;">
+          <div class="mh-table-actions">
+            <button type="button" class="btn-secondary mh-btn-action" data-edit-id="${h.id}" title="Edit holiday">✏️ Edit</button>
+            <button type="button" class="btn-secondary mh-btn-action" data-delete-id="${h.id}" data-delete-name="${escapeHtml(h.name)}" data-delete-date="${h.date}" style="color:var(--red);" title="Delete holiday">🗑️ Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Attach action handlers
+  tbody.querySelectorAll('[data-edit-id]').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.editId;
+      const item = mhHolidaysList.find(h => h.id === id);
+      if (item) startEditHoliday(item);
+    };
+  });
+
+  tbody.querySelectorAll('[data-delete-id]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.dataset.deleteId;
+      const name = btn.dataset.deleteName;
+      const date = btn.dataset.deleteDate;
+      await deleteHoliday(id, name, date);
+    };
+  });
+}
+
+function resetHolidayAddForm() {
+  const form = $('mh-holiday-form');
+  if (form) form.reset();
+  if ($('mh-input-id')) $('mh-input-id').value = '';
+  if ($('mh-form-title')) $('mh-form-title').textContent = 'Add Holiday';
+  if ($('mh-input-date')) $('mh-input-date').value = `${mhSelectedYear}-01-01`;
+}
+
+function startEditHoliday(h) {
+  resetHolidayAddForm();
+  if ($('mh-form-title')) $('mh-form-title').textContent = 'Edit Holiday';
+  if ($('mh-input-id')) $('mh-input-id').value = h.id;
+  if ($('mh-input-date')) $('mh-input-date').value = h.date;
+  if ($('mh-input-name')) $('mh-input-name').value = h.name;
+  if ($('mh-input-type')) $('mh-input-type').value = h.type || 'gazetted';
+  if ($('mh-input-repeats')) $('mh-input-repeats').checked = Boolean(h.repeats_yearly);
+
+  $('mh-add-section')?.classList.remove('hidden');
+  $('mh-copy-section')?.classList.add('hidden');
+  $('mh-paste-section')?.classList.add('hidden');
+  $('mh-input-name')?.focus();
+}
+
+async function saveHoliday() {
+  const id = $('mh-input-id')?.value || null;
+  const dateVal = $('mh-input-date')?.value?.trim();
+  const nameVal = $('mh-input-name')?.value?.trim();
+  const typeVal = $('mh-input-type')?.value || 'gazetted';
+  const repeatsVal = Boolean($('mh-input-repeats')?.checked);
+
+  if (!dateVal || !nameVal) {
+    alert('Please enter both holiday date and name.');
+    return;
+  }
+
+  // Verify year matches or prompt
+  const yearMatch = dateVal.slice(0, 4);
+  if (yearMatch !== String(mhSelectedYear)) {
+    if (!confirm(`The date ${dateVal} belongs to year ${yearMatch}, but you are currently viewing ${mhSelectedYear}. Do you want to proceed?`)) {
+      return;
+    }
+  }
+
+  const saveBtn = $('mh-btn-save-holiday');
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
+    if (id) {
+      const { error } = await sb
+        .from('holidays')
+        .update({
+          holiday_date: dateVal,
+          name: nameVal,
+          type: typeVal,
+          repeats_yearly: repeatsVal
+        })
+        .eq('id', id);
+
+      if (error) {
+        alert('Failed to update holiday: ' + error.message);
+        return;
+      }
+    } else {
+      const { error } = await sb
+        .from('holidays')
+        .insert({
+          holiday_date: dateVal,
+          name: nameVal,
+          type: typeVal,
+          repeats_yearly: repeatsVal,
+          created_by: currentUser?.id || null
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          alert(`A holiday with date "${dateVal}" and name "${nameVal}" already exists.`);
+        } else {
+          alert('Failed to add holiday: ' + error.message);
+        }
+        return;
+      }
+    }
+
+    resetHolidayAddForm();
+    $('mh-add-section')?.classList.add('hidden');
+    await loadAndRenderManageHolidays(mhSelectedYear);
+    await refreshHolidayWidgetsAndCalendar();
+  } catch (err) {
+    console.error('Error saving holiday:', err);
+    alert('Error saving holiday: ' + (err?.message || err));
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function deleteHoliday(id, name, date) {
+  if (!confirm(`Are you sure you want to delete the holiday "${name}" on ${date}?`)) {
+    return;
+  }
+
+  try {
+    const { error } = await sb
+      .from('holidays')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert('Failed to delete holiday: ' + error.message);
+      return;
+    }
+
+    await loadAndRenderManageHolidays(mhSelectedYear);
+    await refreshHolidayWidgetsAndCalendar();
+  } catch (err) {
+    console.error('Error deleting holiday:', err);
+    alert('Error deleting holiday: ' + (err?.message || err));
+  }
+}
+
+// Copy from previous year
+let mhCopyEligibleHolidays = [];
+async function previewCopyPreviousYearHolidays() {
+  const prevYear = mhSelectedYear - 1;
+  const previewBox = $('mh-copy-preview-content');
+  const executeBtn = $('mh-btn-execute-copy');
+  if (!previewBox) return;
+
+  previewBox.innerHTML = 'Loading recurring holidays from ' + prevYear + '...';
+
+  const prevHolidays = await loadHolidaysForYear(prevYear, true);
+  const recurring = prevHolidays.filter(h => h.repeats_yearly);
+
+  if (recurring.length === 0) {
+    previewBox.innerHTML = `<div style="color:var(--slate);padding:8px;">No holidays marked <strong>"Repeats yearly"</strong> were found in ${prevYear}.</div>`;
+    if (executeBtn) executeBtn.classList.add('hidden');
+    return;
+  }
+
+  const existingTargetMap = new Set(mhHolidaysList.map(h => `${h.date}:::${h.name}`));
+  const toCopy = [];
+
+  let rowsHtml = '';
+  recurring.forEach(h => {
+    // Generate target date with selected year
+    const targetDate = `${mhSelectedYear}-${h.date.slice(5)}`;
+    const isDup = existingTargetMap.has(`${targetDate}:::${h.name}`);
+    if (!isDup) {
+      toCopy.push({
+        holiday_date: targetDate,
+        name: h.name,
+        type: h.type || 'gazetted',
+        repeats_yearly: true,
+        created_by: currentUser?.id || null
+      });
+    }
+
+    rowsHtml += `
+      <tr>
+        <td>${escapeHtml(h.name)}</td>
+        <td>${h.date}</td>
+        <td><strong>${targetDate}</strong></td>
+        <td><span class="hbadge hbadge-${h.type}">${h.type}</span></td>
+        <td>${isDup ? '<span style="color:var(--slate);">Skip (Already exists)</span>' : '<span style="color:#10B981;font-weight:600;">Ready to copy</span>'}</td>
+      </tr>
+    `;
+  });
+
+  mhCopyEligibleHolidays = toCopy;
+
+  previewBox.innerHTML = `
+    <div style="margin-bottom:8px;font-weight:600;">
+      Found ${recurring.length} recurring holiday${recurring.length === 1 ? '' : 's'} in ${prevYear}:
+      <span style="color:#10B981;">${toCopy.length} new to copy</span>,
+      <span style="color:var(--slate);">${recurring.length - toCopy.length} skipped as duplicates</span>.
+    </div>
+    <table class="mh-table" style="font-size:12px;">
+      <thead>
+        <tr><th>Name</th><th>${prevYear} Date</th><th>${mhSelectedYear} Date</th><th>Type</th><th>Status</th></tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+
+  if (executeBtn) {
+    executeBtn.classList.toggle('hidden', toCopy.length === 0);
+  }
+}
+
+async function executeCopyPreviousYearHolidays() {
+  if (mhCopyEligibleHolidays.length === 0) return;
+  const executeBtn = $('mh-btn-execute-copy');
+  if (executeBtn) executeBtn.disabled = true;
+
+  try {
+    const { error } = await sb
+      .from('holidays')
+      .insert(mhCopyEligibleHolidays);
+
+    if (error) {
+      alert('Failed to copy holidays: ' + error.message);
+      return;
+    }
+
+    alert(`Successfully copied ${mhCopyEligibleHolidays.length} recurring holidays into ${mhSelectedYear}!`);
+    mhCopyEligibleHolidays = [];
+    $('mh-copy-section')?.classList.add('hidden');
+    await loadAndRenderManageHolidays(mhSelectedYear);
+    await refreshHolidayWidgetsAndCalendar();
+  } catch (err) {
+    console.error('Error copying holidays:', err);
+    alert('Error copying holidays: ' + (err?.message || err));
+  } finally {
+    if (executeBtn) executeBtn.disabled = false;
+  }
+}
+
+// Paste list import
+let mhPastePlan = {
+  mode: 'add_only',
+  year: 2026,
+  toInsert: [],
+  toUpdate: [],
+  deletedCount: 0
+};
+
+function getSelectedPasteMode() {
+  const checked = document.querySelector('input[name="mh-paste-mode"]:checked');
+  return checked ? checked.value : 'add_only';
+}
+
+function validatePasteList() {
+  const text = ($('mh-paste-textarea')?.value || '').trim();
+  const previewBox = $('mh-paste-preview-box');
+  const previewContent = $('mh-paste-preview-content');
+  const executeBtn = $('mh-btn-execute-paste');
+  const autoRepeats = Boolean($('mh-paste-auto-repeats')?.checked);
+  const mode = getSelectedPasteMode();
+
+  if (!text) {
+    alert('Please paste at least one line of holiday data.');
+    return;
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const existingByDate = new Map();
+  mhHolidaysList.forEach(h => {
+    if (!existingByDate.has(h.date)) existingByDate.set(h.date, []);
+    existingByDate.get(h.date).push(h);
+  });
+
+  const seenInPaste = new Set();
+  const toInsert = [];
+  const toUpdate = [];
+  const previewRows = [];
+
+  const nationalFixedDates = ['01-26', '04-14', '08-15', '10-02', '12-25'];
+  let skippedCount = 0;
+  let errorsCount = 0;
+  let conflictsCount = 0;
+  let addedCount = 0;
+  let updatedCount = 0;
+
+  const parsedLines = [];
+
+  // 1. Initial syntax and range validation
+  lines.forEach((line, idx) => {
+    const lineNum = idx + 1;
+    const parts = line.split(',').map(p => p.trim());
+    const dateStr = parts[0] || '';
+    const nameStr = parts[1] || '';
+    let typeStr = (parts[2] || 'gazetted').toLowerCase();
+
+    // Map legacy types if any
+    if (typeStr === 'public') typeStr = 'gazetted';
+    if (!['gazetted', 'restricted', 'company'].includes(typeStr)) {
+      typeStr = 'gazetted';
+    }
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateStr)) {
+      errorsCount++;
+      previewRows.push({ line: lineNum, text: line, status: 'Error', note: 'Invalid date format (must be YYYY-MM-DD)' });
+      return;
+    }
+
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (m < 1 || m > 12 || d < 1 || d > 31) {
+      errorsCount++;
+      previewRows.push({ line: lineNum, text: line, status: 'Error', note: 'Invalid month/day values' });
+      return;
+    }
+
+    if (y !== mhSelectedYear) {
+      errorsCount++;
+      previewRows.push({ line: lineNum, text: line, status: 'Error', note: `Date year (${y}) does not match selected year (${mhSelectedYear})` });
+      return;
+    }
+
+    if (!nameStr) {
+      errorsCount++;
+      previewRows.push({ line: lineNum, text: line, status: 'Error', note: 'Missing holiday name' });
+      return;
+    }
+
+    // Multiple holidays can share a date, but duplicate (date, name) in the pasted list is skipped
+    const pasteKey = `${dateStr}:::${nameStr.toLowerCase()}`;
+    if (seenInPaste.has(pasteKey)) {
+      skippedCount++;
+      previewRows.push({ line: lineNum, text: line, status: 'Skip', note: 'Duplicate holiday in pasted list' });
+      return;
+    }
+    seenInPaste.add(pasteKey);
+
+    const isNationalFixed = autoRepeats && nationalFixedDates.includes(dateStr.slice(5));
+
+    parsedLines.push({
+      lineNum,
+      originalText: line,
+      dateStr,
+      nameStr,
+      typeStr,
+      isNationalFixed
+    });
+  });
+
+  // 2. Mode processing
+  if (mode === 'replace_year') {
+    parsedLines.forEach(item => {
+      addedCount++;
+      toInsert.push({
+        holiday_date: item.dateStr,
+        name: item.nameStr,
+        type: item.typeStr,
+        repeats_yearly: item.isNationalFixed,
+        created_by: currentUser?.id || null
+      });
+      previewRows.push({
+        line: item.lineNum,
+        text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})${item.isNationalFixed ? ' [Yearly]' : ''}`,
+        status: 'Valid (Add)',
+        note: 'Will import after deleting all holidays of this year'
+      });
+    });
+  } else if (mode === 'add_only') {
+    parsedLines.forEach(item => {
+      const rowsOnDate = existingByDate.get(item.dateStr) || [];
+      const exactMatch = rowsOnDate.some(h => h.name.trim().toLowerCase() === item.nameStr.trim().toLowerCase());
+      if (exactMatch) {
+        skippedCount++;
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})`,
+          status: 'Skip',
+          note: `Holiday already exists on ${item.dateStr}`
+        });
+      } else if (rowsOnDate.length > 0) {
+        skippedCount++;
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})`,
+          status: 'Skip',
+          note: `Date ${item.dateStr} already has holiday(s) in database (${rowsOnDate.map(h => h.name).join(', ')})`
+        });
+      } else {
+        addedCount++;
+        toInsert.push({
+          holiday_date: item.dateStr,
+          name: item.nameStr,
+          type: item.typeStr,
+          repeats_yearly: item.isNationalFixed,
+          created_by: currentUser?.id || null
+        });
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})${item.isNationalFixed ? ' [Yearly]' : ''}`,
+          status: 'Valid (Add)',
+          note: 'New holiday to insert'
+        });
+      }
+    });
+  } else {
+    // mode === 'update_existing'
+    // Two-pass resolution:
+    // Pass 1: Match on date AND name
+    const matchedExistingIds = new Set();
+    const unmatchedParsed = [];
+
+    parsedLines.forEach(item => {
+      const rowsOnDate = existingByDate.get(item.dateStr) || [];
+      const exactMatch = rowsOnDate.find(h => !matchedExistingIds.has(h.id) && h.name.trim().toLowerCase() === item.nameStr.trim().toLowerCase());
+
+      if (exactMatch) {
+        matchedExistingIds.add(exactMatch.id);
+        const typeChanged = exactMatch.type !== item.typeStr;
+        const repeatChanged = Boolean(exactMatch.repeats_yearly) !== Boolean(item.isNationalFixed);
+
+        if (typeChanged || repeatChanged) {
+          updatedCount++;
+          toUpdate.push({
+            id: exactMatch.id,
+            name: exactMatch.name,
+            type: item.typeStr,
+            repeats_yearly: item.isNationalFixed
+          });
+          previewRows.push({
+            line: item.lineNum,
+            text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})`,
+            status: 'Update',
+            note: `Matched on date & name. Update: type=${exactMatch.type}→${item.typeStr}${repeatChanged ? (item.isNationalFixed ? ', yearly=true' : ', yearly=false') : ''}`
+          });
+        } else {
+          skippedCount++;
+          previewRows.push({
+            line: item.lineNum,
+            text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})`,
+            status: 'Skip',
+            note: 'Already up to date (exact match on date & name)'
+          });
+        }
+      } else {
+        unmatchedParsed.push(item);
+      }
+    });
+
+    // Pass 2: If no exact match on date & name:
+    // - If only the name changed for a date that has exactly one row, offer as update.
+    // - If a date has several rows, never guess; list it as a conflict for user to resolve.
+    // - If date has no rows or all rows already claimed, insert as new.
+    unmatchedParsed.forEach(item => {
+      const rowsOnDate = existingByDate.get(item.dateStr) || [];
+      const availableRows = rowsOnDate.filter(h => !matchedExistingIds.has(h.id));
+
+      if (rowsOnDate.length === 0) {
+        addedCount++;
+        toInsert.push({
+          holiday_date: item.dateStr,
+          name: item.nameStr,
+          type: item.typeStr,
+          repeats_yearly: item.isNationalFixed,
+          created_by: currentUser?.id || null
+        });
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})${item.isNationalFixed ? ' [Yearly]' : ''}`,
+          status: 'Valid (Add)',
+          note: 'New holiday to insert'
+        });
+      } else if (rowsOnDate.length === 1 && availableRows.length === 1) {
+        const existingRow = availableRows[0];
+        matchedExistingIds.add(existingRow.id);
+        updatedCount++;
+        toUpdate.push({
+          id: existingRow.id,
+          name: item.nameStr,
+          type: item.typeStr,
+          repeats_yearly: item.isNationalFixed
+        });
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})`,
+          status: 'Update',
+          note: `Single row on date - rename: "${existingRow.name}" (${existingRow.type}) → "${item.nameStr}" (${item.typeStr})`
+        });
+      } else if (rowsOnDate.length > 1) {
+        conflictsCount++;
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})`,
+          status: 'Conflict',
+          note: `⚠️ Conflict: Date has ${rowsOnDate.length} existing holidays (${rowsOnDate.map(h => `"${h.name}"`).join(', ')}). Cannot auto-match changed name. Resolve manually.`
+        });
+      } else {
+        // Row on date already claimed by Pass 1, so this is an additional holiday
+        addedCount++;
+        toInsert.push({
+          holiday_date: item.dateStr,
+          name: item.nameStr,
+          type: item.typeStr,
+          repeats_yearly: item.isNationalFixed,
+          created_by: currentUser?.id || null
+        });
+        previewRows.push({
+          line: item.lineNum,
+          text: `${item.dateStr} | ${item.nameStr} (${item.typeStr})${item.isNationalFixed ? ' [Yearly]' : ''}`,
+          status: 'Valid (Add)',
+          note: `Additional holiday on ${item.dateStr} to insert`
+        });
+      }
+    });
+  }
+
+  // Sort preview rows by original line number
+  previewRows.sort((a, b) => a.line - b.line);
+
+  const deletedCount = mode === 'replace_year' ? mhHolidaysList.length : 0;
+
+  mhPastePlan = {
+    mode,
+    year: mhSelectedYear,
+    toInsert,
+    toUpdate,
+    deletedCount
+  };
+
+  const modeLabels = {
+    add_only: 'Add new only',
+    update_existing: 'Update existing (match date & name)',
+    replace_year: 'Replace this year'
+  };
+
+  if (previewBox && previewContent) {
+    previewBox.classList.remove('hidden');
+
+    const conflictAlertHtml = conflictsCount > 0
+      ? `<div style="padding:8px 12px;margin-bottom:12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:6px;color:#F59E0B;font-size:12px;">
+           ⚠️ <strong>${conflictsCount} conflict(s) detected:</strong> Dates with several existing holidays cannot be auto-renamed. Please edit the pasted list to match exact holiday names or resolve the dates before importing.
+         </div>`
+      : '';
+
+    previewContent.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;font-size:12.5px;align-items:center;">
+        <div>Mode: <strong style="color:var(--primary,#7C3AED);">${modeLabels[mode]}</strong></div>
+        <div>➕ Added: <strong style="color:#10B981;">${addedCount}</strong></div>
+        <div>🔄 Updated: <strong style="color:#3B82F6;">${updatedCount}</strong></div>
+        <div>🗑️ Deleted: <strong style="color:#EF4444;">${deletedCount}</strong></div>
+        <div>⏭️ Skipped: <strong style="color:var(--slate);">${skippedCount}</strong></div>
+        ${conflictsCount > 0 ? `<div>⚠️ Conflicts: <strong style="color:#F59E0B;">${conflictsCount}</strong></div>` : ''}
+        <div>❌ Errors: <strong style="color:#DC2626;">${errorsCount}</strong></div>
+      </div>
+      ${conflictAlertHtml}
+      <table class="mh-table" style="font-size:12px;">
+        <thead><tr><th>Line</th><th>Content</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody>
+          ${previewRows.map(r => {
+            let statusBadge = '';
+            if (r.status.startsWith('Valid')) {
+              statusBadge = '<span style="color:#10B981;font-weight:700;">✓ Add</span>';
+            } else if (r.status === 'Update') {
+              statusBadge = '<span style="color:#3B82F6;font-weight:700;">🔄 Update</span>';
+            } else if (r.status === 'Skip') {
+              statusBadge = '<span style="color:var(--slate);font-weight:600;">Skip</span>';
+            } else if (r.status === 'Conflict') {
+              statusBadge = '<span style="color:#F59E0B;font-weight:700;">⚠️ Conflict</span>';
+            } else {
+              statusBadge = '<span style="color:#DC2626;font-weight:700;">❌ Error</span>';
+            }
+            return `
+              <tr>
+                <td>${r.line}</td>
+                <td style="font-family:monospace;">${escapeHtml(r.text)}</td>
+                <td>${statusBadge}</td>
+                <td style="color:var(--slate);">${escapeHtml(r.note || '')}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  const hasExecutableChanges = (mode === 'replace_year' && (toInsert.length > 0 || deletedCount > 0)) ||
+    (toInsert.length > 0 || toUpdate.length > 0);
+
+  if (executeBtn) {
+    executeBtn.classList.toggle('hidden', !hasExecutableChanges || conflictsCount > 0);
+  }
+}
+
+async function executePasteImport() {
+  const { mode, year, toInsert, toUpdate, deletedCount } = mhPastePlan;
+  if (!currentUser || currentProfile?.role !== 'boss') return;
+
+  let confirmMsg = '';
+  if (mode === 'replace_year') {
+    confirmMsg = `WARNING: Are you sure you want to REPLACE all holidays for ${year}?\n\n• ${deletedCount} existing holidays will be DELETED\n• ${toInsert.length} new holidays will be imported\n\nProceed?`;
+  } else if (mode === 'update_existing') {
+    confirmMsg = `Confirm holiday import for ${year}:\n\n• ${toInsert.length} to add\n• ${toUpdate.length} to update\n\nProceed?`;
+  } else {
+    confirmMsg = `Confirm holiday import for ${year}:\n\n• ${toInsert.length} new holidays to add\n\nProceed?`;
+  }
+
+  if (!confirm(confirmMsg)) return;
+
+  const executeBtn = $('mh-btn-execute-paste');
+  if (executeBtn) executeBtn.disabled = true;
+
+  try {
+    if (mode === 'replace_year') {
+      const { error: delErr } = await sb
+        .from('holidays')
+        .delete()
+        .gte('holiday_date', `${year}-01-01`)
+        .lte('holiday_date', `${year}-12-31`);
+
+      if (delErr) throw delErr;
+
+      if (toInsert.length > 0) {
+        const { error: insErr } = await sb
+          .from('holidays')
+          .insert(toInsert);
+        if (insErr) throw insErr;
+      }
+
+      alert(`Successfully replaced holidays for ${year} (${toInsert.length} imported)!`);
+    } else if (mode === 'update_existing') {
+      for (const item of toUpdate) {
+        const { error: upErr } = await sb
+          .from('holidays')
+          .update({
+            name: item.name,
+            type: item.type,
+            repeats_yearly: item.repeats_yearly
+          })
+          .eq('id', item.id);
+        if (upErr) throw upErr;
+      }
+
+      if (toInsert.length > 0) {
+        const { error: insErr } = await sb
+          .from('holidays')
+          .insert(toInsert);
+        if (insErr) throw insErr;
+      }
+
+      alert(`Successfully updated ${toUpdate.length} and added ${toInsert.length} holidays for ${year}!`);
+    } else {
+      // mode === 'add_only'
+      if (toInsert.length > 0) {
+        const { error: insErr } = await sb
+          .from('holidays')
+          .insert(toInsert);
+        if (insErr) throw insErr;
+      }
+      alert(`Successfully added ${toInsert.length} holidays for ${year}!`);
+    }
+
+    mhPastePlan = { mode: 'add_only', year: mhSelectedYear, toInsert: [], toUpdate: [], deletedCount: 0 };
+    if ($('mh-paste-textarea')) $('mh-paste-textarea').value = '';
+    $('mh-paste-section')?.classList.add('hidden');
+    $('mh-paste-preview-box')?.classList.add('hidden');
+    await loadAndRenderManageHolidays(mhSelectedYear);
+    await refreshHolidayWidgetsAndCalendar();
+  } catch (err) {
+    console.error('Error importing holidays:', err);
+    alert('Error importing holidays: ' + (err?.message || err));
+  } finally {
+    if (executeBtn) executeBtn.disabled = false;
+  }
+}
+
+async function deleteAllHolidaysOfYear() {
+  if (!currentUser || currentProfile?.role !== 'boss') return;
+  const count = mhHolidaysList.length;
+  if (count === 0) {
+    alert(`There are no holidays recorded for ${mhSelectedYear}.`);
+    return;
+  }
+
+  const confirmed = confirm(
+    `DANGER: Are you sure you want to delete ALL ${count} holidays for the year ${mhSelectedYear}?\n\nThis cannot be undone!`
+  );
+  if (!confirmed) return;
+
+  const btn = $('mh-btn-delete-year');
+  if (btn) btn.disabled = true;
+
+  try {
+    const { error } = await sb
+      .from('holidays')
+      .delete()
+      .gte('holiday_date', `${mhSelectedYear}-01-01`)
+      .lte('holiday_date', `${mhSelectedYear}-12-31`);
+
+    if (error) {
+      alert('Failed to delete holidays: ' + error.message);
+      return;
+    }
+
+    alert(`Successfully deleted all ${count} holidays for ${mhSelectedYear}.`);
+    await loadAndRenderManageHolidays(mhSelectedYear);
+    await refreshHolidayWidgetsAndCalendar();
+  } catch (err) {
+    console.error('Error deleting all holidays of year:', err);
+    alert('Error deleting holidays: ' + (err?.message || err));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function refreshHolidayWidgetsAndCalendar() {
+  await renderHolidayWidget();
+  if (currentAppPage === 'calendar') {
+    await renderCalendarPage();
+  }
+}
+
+function initManageHolidays() {
+  // Year selector in modal
+  $('mh-year-select')?.addEventListener('change', async (e) => {
+    mhSelectedYear = Number(e.target.value);
+    await loadAndRenderManageHolidays(mhSelectedYear);
+  });
+
+  // Close buttons
+  $('mh-close-btn')?.addEventListener('click', closeManageHolidaysModal);
+  $('mh-footer-close-btn')?.addEventListener('click', closeManageHolidaysModal);
+
+  // Backdrop click to close
+  $('manage-holidays-modal')?.addEventListener('click', (e) => {
+    if (e.target === $('manage-holidays-modal')) {
+      closeManageHolidaysModal();
+    }
+  });
+
+  // Toolbar toggles
+  $('mh-btn-toggle-add')?.addEventListener('click', () => {
+    const section = $('mh-add-section');
+    if (!section) return;
+    const isHidden = section.classList.contains('hidden');
+    $('mh-copy-section')?.classList.add('hidden');
+    $('mh-paste-section')?.classList.add('hidden');
+    if (isHidden) {
+      resetHolidayAddForm();
+      section.classList.remove('hidden');
+    } else {
+      section.classList.add('hidden');
+    }
+  });
+
+  $('mh-btn-toggle-copy')?.addEventListener('click', () => {
+    const section = $('mh-copy-section');
+    if (!section) return;
+    const isHidden = section.classList.contains('hidden');
+    $('mh-add-section')?.classList.add('hidden');
+    $('mh-paste-section')?.classList.add('hidden');
+    if (isHidden) {
+      section.classList.remove('hidden');
+      previewCopyPreviousYearHolidays();
+    } else {
+      section.classList.add('hidden');
+    }
+  });
+
+  $('mh-btn-toggle-paste')?.addEventListener('click', () => {
+    const section = $('mh-paste-section');
+    if (!section) return;
+    const isHidden = section.classList.contains('hidden');
+    $('mh-add-section')?.classList.add('hidden');
+    $('mh-copy-section')?.classList.add('hidden');
+    if (isHidden) {
+      section.classList.remove('hidden');
+    } else {
+      section.classList.add('hidden');
+    }
+  });
+
+  // Form cancel / save
+  $('mh-btn-cancel-add')?.addEventListener('click', () => {
+    $('mh-add-section')?.classList.add('hidden');
+    resetHolidayAddForm();
+  });
+  $('mh-btn-save-holiday')?.addEventListener('click', saveHoliday);
+
+  // Copy buttons
+  $('mh-btn-cancel-copy')?.addEventListener('click', () => {
+    $('mh-copy-section')?.classList.add('hidden');
+  });
+  $('mh-btn-preview-copy')?.addEventListener('click', previewCopyPreviousYearHolidays);
+  $('mh-btn-execute-copy')?.addEventListener('click', executeCopyPreviousYearHolidays);
+
+  // Paste buttons
+  $('mh-btn-cancel-paste')?.addEventListener('click', () => {
+    $('mh-paste-section')?.classList.add('hidden');
+  });
+  $('mh-btn-validate-paste')?.addEventListener('click', validatePasteList);
+  $('mh-btn-execute-paste')?.addEventListener('click', executePasteImport);
+
+  // Delete all holidays of year button
+  $('mh-btn-delete-year')?.addEventListener('click', deleteAllHolidaysOfYear);
+
+  // Paste mode change listener to re-validate if preview is currently visible
+  document.querySelectorAll('input[name="mh-paste-mode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (!$('mh-paste-preview-box')?.classList.contains('hidden')) {
+        validatePasteList();
+      }
+    });
+  });
+
+  // Search & filter
+  $('mh-search-input')?.addEventListener('input', renderManageHolidaysTable);
+  $('mh-filter-type')?.addEventListener('change', renderManageHolidaysTable);
 }
 
 // =========================================================
@@ -4503,7 +5559,9 @@ function showPage(pageName, pushToHistory = true) {
   // Ensure bottom navigation tab is visible upon navigating
   $('bottom-nav')?.classList.remove('nav-hidden');
 
-  // close the mobile sidebar after navigating
+  // close the mobile sidebar and profile drawer after navigating
+  closeEmployeeDrawer();
+  $('notif-panel')?.classList.add('hidden');
   $('sidebar').classList.remove('open');
   $('sidebar-backdrop').classList.remove('open');
 }
@@ -4756,31 +5814,63 @@ let calFilter = 'all'; // 'all' | 'holidays' | 'tasks'
 let calScope = 'mine'; // 'mine' | 'everyone' (for employee)
 let calShowAnnouncements = false;
 
+function syncCalendarSelects() {
+  const mSel = $('cal-month-select');
+  const ySel = $('cal-year-select');
+
+  if (ySel && ySel.children.length === 0) {
+    let yHtml = '';
+    for (let y = 2024; y <= 2035; y++) {
+      yHtml += `<option value="${y}">${y}</option>`;
+    }
+    ySel.innerHTML = yHtml;
+  }
+
+  if (mSel) mSel.value = String(calCurrentMonth);
+  if (ySel) ySel.value = String(calCurrentYear);
+}
+
 function initCalendar() {
-  $('cal-prev-btn')?.addEventListener('click', () => {
+  syncCalendarSelects();
+
+  $('cal-month-select')?.addEventListener('change', async (e) => {
+    calCurrentMonth = Number(e.target.value);
+    await renderCalendarPage();
+  });
+
+  $('cal-year-select')?.addEventListener('change', async (e) => {
+    calCurrentYear = Number(e.target.value);
+    await renderCalendarPage();
+  });
+
+  $('cal-prev-btn')?.addEventListener('click', async () => {
     calCurrentMonth--;
     if (calCurrentMonth < 0) {
       calCurrentMonth = 11;
       calCurrentYear--;
     }
-    renderCalendarPage();
+    await renderCalendarPage();
   });
 
-  $('cal-next-btn')?.addEventListener('click', () => {
+  $('cal-next-btn')?.addEventListener('click', async () => {
     calCurrentMonth++;
     if (calCurrentMonth > 11) {
       calCurrentMonth = 0;
       calCurrentYear++;
     }
-    renderCalendarPage();
+    await renderCalendarPage();
   });
 
-  $('cal-today-btn')?.addEventListener('click', () => {
+  $('cal-today-btn')?.addEventListener('click', async () => {
     const today = new Date();
     calCurrentYear = today.getFullYear();
     calCurrentMonth = today.getMonth();
     calSelectedDate = toDateStr(today);
-    renderCalendarPage();
+    await renderCalendarPage();
+  });
+
+  $('cal-manage-holidays-btn')?.addEventListener('click', () => {
+    openManageHolidaysModal(calCurrentYear);
   });
 
   document.querySelectorAll('.cal-chip[data-cal-filter]').forEach(chip => {
@@ -4789,6 +5879,7 @@ function initCalendar() {
       chip.classList.add('active');
       calFilter = chip.dataset.calFilter;
       renderCalendarGrid();
+      renderCalendarMonthHolidays();
       renderCalendarSelectedDay();
     });
   });
@@ -4824,9 +5915,11 @@ function updateCalendarControlsVisibility() {
   const isBoss = currentProfile?.role === 'boss';
   const bossFilterWrap = $('cal-boss-filter-wrap');
   const empScopeToggle = $('cal-scope-toggle');
+  const manageHolidaysBtn = $('cal-manage-holidays-btn');
 
   if (bossFilterWrap) bossFilterWrap.classList.toggle('hidden', !isBoss);
   if (empScopeToggle) empScopeToggle.classList.toggle('hidden', isBoss);
+  if (manageHolidaysBtn) manageHolidaysBtn.classList.toggle('hidden', !isBoss);
 
   if (isBoss && $('cal-filter-employee')) {
     const sel = $('cal-filter-employee');
@@ -4856,9 +5949,12 @@ function getCalendarFilteredTasks() {
   return tasks;
 }
 
-function renderCalendarPage() {
+async function renderCalendarPage() {
   updateCalendarControlsVisibility();
+  syncCalendarSelects();
+  await loadHolidaysForYear(calCurrentYear);
   renderCalendarGrid();
+  renderCalendarMonthHolidays();
   renderCalendarSelectedDay();
 }
 
@@ -4880,7 +5976,8 @@ function renderCalendarGrid() {
   ];
   const holidayMap = new Map();
   holidays.forEach(h => {
-    if (!holidayMap.has(h.date)) holidayMap.set(h.date, h);
+    if (!holidayMap.has(h.date)) holidayMap.set(h.date, []);
+    holidayMap.get(h.date).push(h);
   });
 
   // Get tasks map by deadline
@@ -4942,15 +6039,45 @@ function renderCalendarGrid() {
     const isToday = cellDate === todayStr;
     const isSelected = cellDate === calSelectedDate;
 
-    const dayHoliday = holidayMap.get(cellDate);
+    const dayHolidays = holidayMap.get(cellDate) || [];
     const dayTasks = tasksMap.get(cellDate) || [];
     const dayNotices = noticesMap.get(cellDate) || [];
 
-    // Collect indicator dots according to calFilter
-    const dots = [];
-    if ((calFilter === 'all' || calFilter === 'holidays') && dayHoliday) {
-      dots.push({ type: 'holiday', title: dayHoliday.name });
+    // Strongest holiday priority: gazetted > company > restricted > weekly
+    const holidayRank = { gazetted: 4, company: 3, restricted: 2, weekly: 1 };
+    let strongestHoliday = null;
+    let maxRank = 0;
+    dayHolidays.forEach(h => {
+      const r = holidayRank[h.type] || 0;
+      if (r > maxRank) {
+        maxRank = r;
+        strongestHoliday = h;
+      }
+    });
+
+    // Cell tint class & tiny letter badge (G / R / C)
+    // Tint uses the strongest type. Weekly offs get neutral gray cell tint only.
+    const showHolidayCell = (calFilter === 'all' || calFilter === 'holidays') && !!strongestHoliday;
+    let cellHolidayClass = '';
+    let cellBadgeHtml = '';
+
+    if (showHolidayCell) {
+      if (strongestHoliday.type === 'gazetted') {
+        cellHolidayClass = 'cal-day-holiday-gazetted';
+        cellBadgeHtml = '<span class="cal-cell-badge cal-cell-badge-gazetted" title="Gazetted Holiday">G</span>';
+      } else if (strongestHoliday.type === 'company') {
+        cellHolidayClass = 'cal-day-holiday-company';
+        cellBadgeHtml = '<span class="cal-cell-badge cal-cell-badge-company" title="Company Holiday">C</span>';
+      } else if (strongestHoliday.type === 'restricted') {
+        cellHolidayClass = 'cal-day-holiday-restricted';
+        cellBadgeHtml = '<span class="cal-cell-badge cal-cell-badge-restricted" title="Restricted Holiday (Optional)">R</span>';
+      } else if (strongestHoliday.type === 'weekly') {
+        cellHolidayClass = 'cal-day-holiday-weekly';
+      }
     }
+
+    // Indicator dots: Tasks and Notices ONLY. Holidays are NEVER shown as dots.
+    const dots = [];
     if (calFilter === 'all' || calFilter === 'tasks') {
       dayTasks.forEach(t => {
         let type = 'pending';
@@ -4970,16 +6097,26 @@ function renderCalendarGrid() {
     const visibleDots = dots.slice(0, maxVisibleDots);
     const overflowDots = dots.length - maxVisibleDots;
 
-    const dotsHtml = visibleDots.map(d => `<span class="cal-dot cal-dot-${d.type === 'holiday' ? 'holiday' : d.type === 'notice' ? 'notice' : 'task-' + d.type}"></span>`).join('') +
-      (overflowDots > 0 ? `<span class="cal-dot-more">+${overflowDots}</span>` : '');
+    const dotsHtml = visibleDots.map(d => {
+      if (d.type === 'overdue') {
+        return '<span class="cal-dot cal-dot-task-overdue" title="Overdue task">!</span>';
+      }
+      return `<span class="cal-dot ${d.type === 'notice' ? 'cal-dot-notice' : 'cal-dot-task-' + d.type}" title="${escapeHtml(d.title || '')}"></span>`;
+    }).join('') + (overflowDots > 0 ? `<span class="cal-dot-more">+${overflowDots}</span>` : '');
 
-    const holidayTitleHtml = (dayHoliday && (calFilter === 'all' || calFilter === 'holidays'))
-      ? `<div class="cal-day-holiday-title" title="${escapeHtml(dayHoliday.name)}">${escapeHtml(dayHoliday.name)}</div>`
+    // Holiday name inside cell: only on desktop (>900px, hidden on mobile via CSS),
+    // and NEVER for weekly offs. If multiple holidays on date, join their names.
+    const nonWeeklyHolidays = dayHolidays.filter(h => h.type !== 'weekly');
+    const holidayTitleHtml = (showHolidayCell && nonWeeklyHolidays.length > 0)
+      ? `<div class="cal-day-holiday-title ${strongestHoliday.type || 'gazetted'}" title="${escapeHtml(nonWeeklyHolidays.map(h => h.name).join(' / '))}">${escapeHtml(nonWeeklyHolidays.map(h => h.name).join(' / '))}</div>`
       : '';
 
     html += `
-      <div class="cal-day ${isOtherMonth ? 'cal-day-other-month' : ''} ${isToday ? 'cal-day-today' : ''} ${isSelected ? 'cal-day-selected' : ''}" data-date="${cellDate}">
-        <div class="cal-day-number">${dayNum}</div>
+      <div class="cal-day ${cellHolidayClass} ${isOtherMonth ? 'cal-day-other-month' : ''} ${isToday ? 'cal-day-today' : ''} ${isSelected ? 'cal-day-selected' : ''}" data-date="${cellDate}">
+        <div class="cal-day-number">
+          <span class="cal-day-number-text">${dayNum}</span>
+          ${cellBadgeHtml}
+        </div>
         ${holidayTitleHtml}
         <div class="cal-day-dots">${dotsHtml}</div>
       </div>
@@ -4992,6 +6129,56 @@ function renderCalendarGrid() {
   gridEl.querySelectorAll('.cal-day').forEach(cell => {
     cell.addEventListener('click', () => {
       const dStr = cell.dataset.date;
+      selectCalendarDay(dStr);
+    });
+  });
+}
+
+function renderCalendarMonthHolidays() {
+  const listEl = $('cal-month-holidays-list');
+  const countEl = $('cal-month-holidays-count');
+  if (!listEl) return;
+
+  const targetMonthStr = `${calCurrentYear}-${String(calCurrentMonth + 1).padStart(2, '0')}`;
+  const allForYear = getAllHolidays(calCurrentYear);
+  const monthHolidays = allForYear.filter(h => h.date.startsWith(targetMonthStr));
+
+  if (countEl) {
+    countEl.textContent = `${monthHolidays.length} holiday${monthHolidays.length === 1 ? '' : 's'}`;
+  }
+
+  if (monthHolidays.length === 0) {
+    listEl.innerHTML = '<div class="cal-empty-msg" style="grid-column:1/-1;">No holidays in this month.</div>';
+    return;
+  }
+
+  const dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const badgeLabels = { gazetted: 'Gazetted', restricted: 'Optional', company: 'Company', weekly: 'Weekly Off' };
+
+  listEl.innerHTML = monthHolidays.map(h => {
+    const d = parseDateStr(h.date);
+    const dayNum = d.getDate();
+    const dow = dows[d.getDay()];
+    const type = h.type || 'gazetted';
+    const bText = type === 'restricted' ? 'Optional' : (badgeLabels[type] || type);
+
+    return `
+      <div class="cal-hmonth-item" data-date="${h.date}" title="Click to view events for ${formatDate(h.date)}">
+        <div class="cal-hmonth-date-sq ${type}">
+          <span class="day-num">${dayNum}</span>
+          <span class="day-dow">${dow}</span>
+        </div>
+        <div class="cal-hmonth-info">
+          <div class="cal-hmonth-name">${escapeHtml(h.name)}</div>
+          <div><span class="hbadge hbadge-${type}">${escapeHtml(bText)}</span></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('.cal-hmonth-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const dStr = item.dataset.date;
       selectCalendarDay(dStr);
     });
   });
@@ -5033,17 +6220,17 @@ function renderCalendarSelectedDay() {
     ...getAllHolidays(d.getFullYear()),
     ...getAllHolidays(d.getFullYear() + 1)
   ];
-  const holiday = holidays.find(h => h.date === calSelectedDate);
+  const dayHolidays = holidays.filter(h => h.date === calSelectedDate);
   const tasks = getCalendarFilteredTasks().filter(t => t.deadline === calSelectedDate);
   const notices = calShowAnnouncements && noticesCache
     ? noticesCache.filter(n => n.created_at && n.created_at.slice(0, 10) === calSelectedDate)
     : [];
 
-  const showHolidays = (calFilter === 'all' || calFilter === 'holidays') && !!holiday;
+  const showHolidays = (calFilter === 'all' || calFilter === 'holidays') && dayHolidays.length > 0;
   const showTasks = (calFilter === 'all' || calFilter === 'tasks') && tasks.length > 0;
   const showNotices = calShowAnnouncements && (calFilter === 'all') && notices.length > 0;
 
-  const totalItems = (showHolidays ? 1 : 0) + (showTasks ? tasks.length : 0) + (showNotices ? notices.length : 0);
+  const totalItems = (showHolidays ? dayHolidays.length : 0) + (showTasks ? tasks.length : 0) + (showNotices ? notices.length : 0);
   if (subEl) {
     subEl.textContent = totalItems === 0
       ? 'No events scheduled'
@@ -5057,20 +6244,22 @@ function renderCalendarSelectedDay() {
 
   let html = '';
 
-  // 1. Holiday card
+  // 1. Holiday cards (renders EVERY holiday on this date)
   if (showHolidays) {
-    const typeLabel = { public: 'Public Holiday', restricted: 'Restricted Holiday', weekly: 'Weekly Off' };
-    html += `
-      <div class="cal-card cal-holiday-card">
-        <div class="cal-card-title">${escapeHtml(holiday.name)}</div>
-        <div class="cal-card-meta">
-          <span class="tag tag-holiday" style="background:#FEE2E2;color:#991B1B;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">
-            ${typeLabel[holiday.type] || holiday.type}
-          </span>
-          <span>${formatDate(holiday.date)}</span>
+    const typeLabel = { gazetted: 'Gazetted Holiday', restricted: 'Restricted Holiday (Optional)', company: 'Company Holiday', weekly: 'Weekly Off' };
+    dayHolidays.forEach(h => {
+      html += `
+        <div class="cal-card cal-holiday-card ${h.type || 'gazetted'}">
+          <div class="cal-card-title">${escapeHtml(h.name)}</div>
+          <div class="cal-card-meta">
+            <span class="hbadge hbadge-${h.type || 'gazetted'}">
+              ${typeLabel[h.type] || h.type}
+            </span>
+            <span>${formatDate(h.date)}</span>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    });
   }
 
   // 2. Task cards
@@ -5080,7 +6269,7 @@ function renderCalendarSelectedDay() {
       const isComplete = t.status === 'complete';
       let statusTagHtml = '';
       if (overdue) {
-        statusTagHtml = '<span class="tag" style="background:#FEE2E2;color:#B91C1C;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Overdue</span>';
+        statusTagHtml = '<span class="tag cal-task-tag-overdue" style="background:#FEE2E2;color:#B91C1C;font-weight:700;padding:2px 8px;border-radius:4px;font-size:11px;">⚠️ Overdue</span>';
       } else if (isComplete) {
         statusTagHtml = '<span class="tag" style="background:#D1FAE5;color:#065F46;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Complete</span>';
       } else if (t.status === 'in_progress') {
@@ -5132,6 +6321,7 @@ function renderCalendarSelectedDay() {
 }
 
 initCalendar();
+initManageHolidays();
 
 // =========================================================
 // RECENT ACTIVITY FEED (Shared for Boss and Employee)
@@ -5490,6 +6680,10 @@ function renderSettingsPage() {
   const aboutVer = $('set-about-version');
   if (aboutVer) aboutVer.textContent = '1.0.0';
 
+  // Holidays management card (Boss only)
+  const isBoss = currentProfile?.role === 'boss';
+  $('settings-holidays-card')?.classList.toggle('hidden', !isBoss);
+
   // Session card
   const logoutUserEl = $('set-logout-user-email');
   if (logoutUserEl) logoutUserEl.textContent = currentUser?.email || 'user';
@@ -5499,6 +6693,9 @@ function initSettingsPage() {
   $('settings-open-pw-btn')?.addEventListener('click', openChangePasswordModal);
   $('settings-theme-toggle-btn')?.addEventListener('click', toggleTheme);
   $('settings-test-notif-btn')?.addEventListener('click', sendTestPushNotification);
+  $('settings-open-holidays-btn')?.addEventListener('click', () => {
+    openManageHolidaysModal(new Date().getFullYear());
+  });
 }
 
 initSettingsPage();
@@ -5509,6 +6706,7 @@ let lastBackPressTime = 0;
 function handleAppBackButton() {
   // 1. Close any open modals
   const openModals = [
+    'manage-holidays-modal',
     'add-employee-modal',
     'history-modal',
     'comments-modal',

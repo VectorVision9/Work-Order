@@ -320,7 +320,7 @@
 
         <div class="emp-top-side">
           <div class="panel holiday-panel">
-            <h2>🎉 Holidays <span class="tag">2026</span></h2>
+            <h2>🎉 Holidays <span class="tag" id="holiday-year-tag-boss">2026</span></h2>
             <div class="holiday-next" id="holiday-next-boss">Loading...</div>
             <div class="holiday-list" id="holiday-list-boss"></div>
             <button type="button" class="btn-secondary holiday-view-all-btn" id="holiday-view-all-btn-boss">View Full Calendar →</button>
@@ -753,7 +753,7 @@
                 <div class="idc-comment-input-row">
                   <textarea id="idc-comment-message" rows="2" placeholder="Write a comment..."></textarea>
                   <div class="idc-comment-actions">
-                    <label class="btn-secondary-small idc-attach-btn" title="Attach image or PDF">
+                    <label class="idc-attach-btn" title="Attach image or PDF">
                       📎
                       <input type="file" id="idc-comment-file" accept="image/*,application/pdf" class="hidden">
                     </label>
@@ -783,6 +783,23 @@
               <button type="button" class="btn-secondary cal-today-btn" id="cal-today-btn">Today</button>
               <button type="button" class="btn-secondary cal-nav-btn" id="cal-next-btn" title="Next month" aria-label="Next month">›</button>
             </div>
+            <div class="cal-jump-picker" id="cal-jump-picker">
+              <select id="cal-month-select" class="cal-select cal-picker-select" aria-label="Select month">
+                <option value="0">Jan</option>
+                <option value="1">Feb</option>
+                <option value="2">Mar</option>
+                <option value="3">Apr</option>
+                <option value="4">May</option>
+                <option value="5">Jun</option>
+                <option value="6">Jul</option>
+                <option value="7">Aug</option>
+                <option value="8">Sep</option>
+                <option value="9">Oct</option>
+                <option value="10">Nov</option>
+                <option value="11">Dec</option>
+              </select>
+              <select id="cal-year-select" class="cal-select cal-picker-select" aria-label="Select year"></select>
+            </div>
           </div>
 
           <div class="calendar-controls">
@@ -809,6 +826,9 @@
               </div>
             </div>
 
+            <!-- Boss Manage Holidays button -->
+            <button type="button" class="btn-secondary hidden" id="cal-manage-holidays-btn" title="Manage official holidays database">📅 Manage Holidays</button>
+
             <!-- Optional announcements toggle -->
             <label class="cal-toggle-label" title="Show announcements on their posted date">
               <input type="checkbox" id="cal-toggle-announcements">
@@ -817,14 +837,36 @@
           </div>
         </div>
 
-        <!-- Dot Legend -->
+        <!-- Calendar Legend -->
         <div class="cal-legend">
-          <span class="cal-legend-item"><span class="cal-dot cal-dot-holiday"></span>Holiday</span>
+          <!-- Holiday Cell Tints -->
+          <span class="cal-legend-item">
+            <span class="cal-legend-swatch cal-cell-swatch-gazetted"><span class="cal-swatch-letter">G</span></span>
+            Gazetted
+          </span>
+          <span class="cal-legend-item">
+            <span class="cal-legend-swatch cal-cell-swatch-restricted"><span class="cal-swatch-letter">R</span></span>
+            Restricted (Optional)
+          </span>
+          <span class="cal-legend-item">
+            <span class="cal-legend-swatch cal-cell-swatch-company"><span class="cal-swatch-letter">C</span></span>
+            Company
+          </span>
+          <span class="cal-legend-item">
+            <span class="cal-legend-swatch cal-cell-swatch-weekly"></span>
+            Weekly Off
+          </span>
+
+          <!-- Task Dots -->
           <span class="cal-legend-item"><span class="cal-dot cal-dot-task-pending"></span>New / Assigned</span>
           <span class="cal-legend-item"><span class="cal-dot cal-dot-task-progress"></span>In Progress</span>
           <span class="cal-legend-item"><span class="cal-dot cal-dot-task-complete"></span>Completed</span>
-          <span class="cal-legend-item"><span class="cal-dot cal-dot-task-overdue"></span>Overdue</span>
+          <span class="cal-legend-item"><span class="cal-dot cal-dot-task-overdue">!</span>Overdue</span>
           <span class="cal-legend-item cal-legend-notice hidden" id="cal-legend-notice-item"><span class="cal-dot cal-dot-notice"></span>Announcement</span>
+
+          <!-- Today & Selected -->
+          <span class="cal-legend-item"><span class="cal-legend-today-ring">26</span>Today</span>
+          <span class="cal-legend-item"><span class="cal-legend-selected-box"></span>Selected</span>
         </div>
 
         <!-- Calendar Main Layout (Desktop: Grid + Side Panel; Mobile: Grid + Stacked List) -->
@@ -841,6 +883,18 @@
             </div>
             <div class="calendar-grid" id="calendar-grid">
               <!-- Dynamically populated by JS -->
+            </div>
+            <!-- Holidays of the Month section under the grid -->
+            <div class="cal-month-holidays-section" id="cal-month-holidays-section">
+              <div class="cal-month-holidays-header">
+                <div class="cal-month-holidays-title">
+                  <span>🎉 Holidays of the Month</span>
+                  <span class="cal-month-holidays-count" id="cal-month-holidays-count">0 holidays</span>
+                </div>
+              </div>
+              <div class="cal-month-holidays-list" id="cal-month-holidays-list">
+                <!-- Dynamically populated -->
+              </div>
             </div>
           </div>
 
@@ -954,6 +1008,19 @@
               <div style="font-size:12.5px;color:var(--slate);margin-top:2px;" id="set-test-notif-desc">Send a test notification to this device</div>
             </div>
             <button type="button" class="btn-secondary" id="settings-test-notif-btn">🚀 Send test notification</button>
+          </div>
+        </div>
+
+        <!-- Boss Holidays Management Card -->
+        <div class="settings-card hidden" id="settings-holidays-card">
+          <h3>📅 Holidays Management</h3>
+          <p class="settings-card-sub">Configure official gazetted, restricted, and company holidays</p>
+          <div class="settings-row">
+            <div>
+              <div style="font-weight:600;font-size:14px;">Holiday Database</div>
+              <div style="font-size:12.5px;color:var(--slate);margin-top:2px;">Add, edit, copy yearly, or paste-import holidays for any year</div>
+            </div>
+            <button type="button" class="btn-secondary" id="settings-open-holidays-btn">Manage Holidays</button>
           </div>
         </div>
 
@@ -1082,11 +1149,11 @@
       <div class="comment-input-row">
         <textarea id="comment-message" rows="2" placeholder="Write a comment..."></textarea>
         <div class="comment-input-actions">
-          <label class="btn-secondary-small comment-attach-btn" title="Attach image or PDF">
+          <label class="comment-attach-btn" title="Attach image or PDF">
             📎
             <input type="file" id="comment-file" accept="image/*,application/pdf" class="hidden">
           </label>
-          <button type="submit" class="btn-primary btn-gradient">Send</button>
+          <button type="submit" class="btn-primary btn-gradient" id="comment-send-btn">Send</button>
         </div>
       </div>
       <div class="msg" id="comment-msg"></div>
@@ -1172,52 +1239,57 @@
 <!-- ---------- Employee profile drawer ---------- -->
 <div id="profile-drawer-backdrop" class="drawer-backdrop hidden">
   <div class="drawer" id="profile-drawer">
-    <button class="drawer-close" id="drawer-close" type="button">&times;</button>
-
-    <div class="drawer-avatar" id="drawer-avatar">--</div>
-    <h2 id="drawer-name">—</h2>
-    <div class="drawer-sub" id="drawer-designation">—</div>
-    <div class="drawer-id-row">
-      <span class="drawer-id" id="drawer-id">EMP-0000</span>
-      <span class="status-pill" id="drawer-status"><span class="status-dot"></span>Active</span>
+    <div class="drawer-header">
+      <div class="drawer-header-title">Employee Details</div>
+      <button class="drawer-close" id="drawer-close" type="button" aria-label="Close details">&times;</button>
     </div>
 
-    <div class="drawer-stats">
-      <div class="stat-box">
-        <div class="stat-value" id="drawer-completed">0</div>
-        <div class="stat-label">Completed</div>
+    <div class="drawer-body">
+      <div class="drawer-avatar" id="drawer-avatar">--</div>
+      <h2 id="drawer-name">—</h2>
+      <div class="drawer-sub" id="drawer-designation">—</div>
+      <div class="drawer-id-row">
+        <span class="drawer-id" id="drawer-id">EMP-0000</span>
+        <span class="status-pill" id="drawer-status"><span class="status-dot"></span>Active</span>
       </div>
-      <div class="stat-box">
-        <div class="stat-value" id="drawer-pending">0</div>
-        <div class="stat-label">Pending</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value" id="drawer-productivity">0%</div>
-        <div class="stat-label">Productivity</div>
-      </div>
-    </div>
 
-    <div class="drawer-section">
-      <label>Department</label>
-      <div class="drawer-value" id="drawer-department">—</div>
-    </div>
-    <div class="drawer-section">
-      <label>Email</label>
-      <div class="drawer-value" id="drawer-email">—</div>
-    </div>
-    <div class="drawer-section">
-      <label>Mobile</label>
-      <div class="drawer-value" id="drawer-mobile">—</div>
-    </div>
-
-    <div class="drawer-section">
-      <label>Attendance <span class="hint">tracked in your external system — update manually</span></label>
-      <div class="attendance-row">
-        <input type="number" id="drawer-attendance-input" min="0" max="100" placeholder="e.g. 92">
-        <span>%</span>
-        <button class="btn-secondary" id="drawer-attendance-save" type="button">Save</button>
+      <div class="drawer-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="drawer-completed">0</div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="drawer-pending">0</div>
+          <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="drawer-productivity">0%</div>
+          <div class="stat-label">Productivity</div>
+        </div>
       </div>
-      <div class="msg" id="drawer-attendance-msg"></div>
+
+      <div class="drawer-section">
+        <label>Department</label>
+        <div class="drawer-value" id="drawer-department">—</div>
+      </div>
+      <div class="drawer-section">
+        <label>Email</label>
+        <div class="drawer-value" id="drawer-email">—</div>
+      </div>
+      <div class="drawer-section">
+        <label>Mobile</label>
+        <div class="drawer-value" id="drawer-mobile">—</div>
+      </div>
+
+      <div class="drawer-section">
+        <label>Attendance <span class="hint">tracked in your external system — update manually</span></label>
+        <div class="attendance-row">
+          <input type="number" id="drawer-attendance-input" min="0" max="100" placeholder="e.g. 92">
+          <span>%</span>
+          <button class="btn-secondary" id="drawer-attendance-save" type="button">Save</button>
+        </div>
+        <div class="msg" id="drawer-attendance-msg"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1246,6 +1318,156 @@
     </div>
     <div class="modal-actions" style="margin-top:16px;">
       <button type="button" class="btn-secondary" id="picker-opt-cancel" style="width:100%;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Boss Manage Holidays Modal ---------- -->
+<div id="manage-holidays-modal" class="modal-backdrop hidden">
+  <div class="modal modal-wide manage-holidays-dialog">
+    <div class="mh-header">
+      <div class="mh-header-left">
+        <h2>📅 Manage Holidays</h2>
+        <div class="mh-year-selector-wrap">
+          <label for="mh-year-select">Year:</label>
+          <select id="mh-year-select" class="cal-select"></select>
+        </div>
+      </div>
+      <button type="button" class="btn-close" id="mh-close-btn" aria-label="Close" title="Close">&times;</button>
+    </div>
+
+    <!-- Actions toolbar -->
+    <div class="mh-toolbar">
+      <div class="mh-toolbar-buttons">
+        <button type="button" class="btn-secondary" id="mh-btn-toggle-add">➕ Add Holiday</button>
+        <button type="button" class="btn-secondary" id="mh-btn-toggle-copy">📋 Copy from <span id="mh-prev-year-label">Prev Year</span></button>
+        <button type="button" class="btn-secondary" id="mh-btn-toggle-paste">📥 Paste List</button>
+        <button type="button" class="btn-secondary mh-btn-danger" id="mh-btn-delete-year" style="color:var(--red,#ef4444);border-color:rgba(239,68,68,0.35);">🗑️ Delete All Holidays of <span id="mh-delete-year-label">2026</span></button>
+      </div>
+      <div class="mh-count-badge" id="mh-count-badge">0 holidays</div>
+    </div>
+
+    <!-- Form 1: Add / Edit Holiday -->
+    <div class="mh-card-section hidden" id="mh-add-section">
+      <h3 id="mh-form-title">Add Holiday</h3>
+      <form id="mh-holiday-form" onsubmit="return false;">
+        <input type="hidden" id="mh-input-id" value="">
+        <div class="mh-form-grid">
+          <div class="form-group">
+            <label for="mh-input-date">Date <span class="req">*</span></label>
+            <input type="date" id="mh-input-date" required class="theme-input">
+          </div>
+          <div class="form-group">
+            <label for="mh-input-name">Holiday Name <span class="req">*</span></label>
+            <input type="text" id="mh-input-name" placeholder="e.g. Independence Day / स्वतंत्रता दिवस" required class="theme-input">
+          </div>
+          <div class="form-group">
+            <label for="mh-input-type">Holiday Type</label>
+            <select id="mh-input-type" class="cal-select">
+              <option value="gazetted">Gazetted (Public)</option>
+              <option value="restricted">Restricted</option>
+              <option value="company">Company</option>
+            </select>
+          </div>
+          <div class="form-group mh-checkbox-group">
+            <label class="cal-toggle-label" style="margin-top:24px;">
+              <input type="checkbox" id="mh-input-repeats">
+              <span>Repeats yearly (fixed date)</span>
+            </label>
+          </div>
+        </div>
+        <div class="mh-form-actions">
+          <button type="button" class="btn-secondary" id="mh-btn-cancel-add">Cancel</button>
+          <button type="button" class="btn-primary" id="mh-btn-save-holiday">Save Holiday</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Form 2: Copy from Previous Year -->
+    <div class="mh-card-section hidden" id="mh-copy-section">
+      <h3>Copy Recurring Holidays from <span id="mh-copy-from-year">2025</span></h3>
+      <p class="mh-section-desc">Copies holidays marked <strong>"Repeats yearly"</strong> from the previous year into <span id="mh-copy-to-year">2026</span>. Dates already present in this year will be skipped automatically.</p>
+      <div class="mh-preview-box" id="mh-copy-preview-box">
+        <div id="mh-copy-preview-content">Click "Preview Recurring Holidays" to see eligible holidays.</div>
+      </div>
+      <div class="mh-form-actions">
+        <button type="button" class="btn-secondary" id="mh-btn-cancel-copy">Cancel</button>
+        <button type="button" class="btn-secondary" id="mh-btn-preview-copy">Preview Recurring Holidays</button>
+        <button type="button" class="btn-primary hidden" id="mh-btn-execute-copy">Confirm & Copy Holidays</button>
+      </div>
+    </div>
+
+    <!-- Form 3: Paste List Import -->
+    <div class="mh-card-section hidden" id="mh-paste-section">
+      <h3>Import Holidays (Paste List)</h3>
+      <p class="mh-section-desc">Paste one holiday per line in format: <code>YYYY-MM-DD,Holiday Name,type</code>.<br>Example: <code>2027-01-26,Republic Day,gazetted</code>. Types: <code>gazetted</code>, <code>restricted</code>, or <code>company</code>.</p>
+      <textarea id="mh-paste-textarea" rows="6" class="theme-input mh-textarea" placeholder="2027-01-26,Republic Day,gazetted&#10;2027-08-15,Independence Day,gazetted"></textarea>
+      <div class="mh-paste-options">
+        <label class="cal-toggle-label">
+          <input type="checkbox" id="mh-paste-auto-repeats" checked>
+          <span>Auto-mark national fixed holidays as repeats yearly</span>
+        </label>
+      </div>
+      <div class="mh-paste-mode-group">
+        <label class="mh-mode-group-title">Import Mode:</label>
+        <div class="mh-mode-radios">
+          <label class="mh-radio-label">
+            <input type="radio" name="mh-paste-mode" value="add_only" checked>
+            <span><strong>Add new only</strong> — Skips holidays if the date already exists</span>
+          </label>
+          <label class="mh-radio-label">
+            <input type="radio" name="mh-paste-mode" value="update_existing">
+            <span><strong>Update existing (match date & name)</strong> — Updates matching holidays (or renames single-row dates), flags conflicts, inserts new</span>
+          </label>
+          <label class="mh-radio-label mh-radio-danger">
+            <input type="radio" name="mh-paste-mode" value="replace_year">
+            <span><strong>Replace this year</strong> — Deletes all holidays for this year, then imports the pasted list</span>
+          </label>
+        </div>
+      </div>
+      <div class="mh-preview-box hidden" id="mh-paste-preview-box">
+        <div id="mh-paste-preview-content"></div>
+      </div>
+      <div class="mh-form-actions">
+        <button type="button" class="btn-secondary" id="mh-btn-cancel-paste">Cancel</button>
+        <button type="button" class="btn-secondary" id="mh-btn-validate-paste">Validate & Preview</button>
+        <button type="button" class="btn-primary hidden" id="mh-btn-execute-paste">Import Valid Holidays</button>
+      </div>
+    </div>
+
+    <!-- Search and Holiday Table / Cards -->
+    <div class="mh-list-section">
+      <div class="mh-search-row">
+        <input type="text" id="mh-search-input" class="theme-input" placeholder="🔍 Search holidays by name or date...">
+        <select id="mh-filter-type" class="cal-select">
+          <option value="all">All Types</option>
+          <option value="gazetted">Gazetted</option>
+          <option value="restricted">Restricted</option>
+          <option value="company">Company</option>
+        </select>
+      </div>
+      <div class="mh-table-wrap" id="mh-table-wrap">
+        <table class="mh-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Day</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Repeats</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mh-tbody">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+        <div class="mh-empty-msg hidden" id="mh-empty-msg">No holidays found for this year.</div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn-secondary" id="mh-footer-close-btn">Close</button>
     </div>
   </div>
 </div>
