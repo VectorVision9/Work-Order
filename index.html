@@ -228,35 +228,94 @@
         <div id="boss-view" class="hidden">
 
           <div class="app-page" data-page-group="dashboard">
-            <div class="panel">
-              <h2>📢 Announcement Board <span class="tag" id="notice-count-tag">0</span></h2>
-              <form id="notice-form">
-                <div class="row2">
-                  <div class="field">
-                    <label>Title</label>
-                    <input type="text" id="notice-title" required placeholder="e.g. Office closed Friday">
+            <div class="panel panel-announcements" id="panel-announcements-boss">
+              <div class="panel-header-row" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+                <h2 style="margin-bottom:0;">📢 Announcement Board <span class="tag" id="notice-count-tag">0</span></h2>
+                <button type="button" class="btn-secondary" id="notice-toggle-form-btn" style="min-height:44px;padding:0 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;">
+                  <span id="notice-toggle-icon">➕</span> <span id="notice-toggle-text">New Announcement</span>
+                </button>
+              </div>
+
+              <div id="notice-form-wrap" class="notice-form-wrap">
+                <div id="notice-edit-banner" class="notice-edit-banner hidden" role="alert">
+                  <div class="notice-edit-banner-text">
+                    <strong>✏️ Editing Announcement</strong>
+                    <p class="notice-edit-note">Note: Changing the meeting date/time or reminders will reset reminder tracking and send reminders again.</p>
                   </div>
-                  <div class="field">
-                    <label>Category</label>
-                    <select id="notice-category">
-                      <option value="general">📢 General</option>
-                      <option value="closure">🚪 Office Closure</option>
-                      <option value="meeting">📅 Meeting</option>
-                      <option value="holiday">🎉 Holiday Notice</option>
-                      <option value="maintenance">🛠️ Server Maintenance</option>
-                    </select>
+                  <button type="button" id="notice-cancel-banner-btn" class="btn-sm btn-secondary" style="min-height:44px;min-width:44px;">Cancel</button>
+                </div>
+
+                <form id="notice-form">
+                  <input type="hidden" id="notice-edit-id" value="">
+                  <div class="row2">
+                    <div class="field">
+                      <label for="notice-title">Title</label>
+                      <input type="text" id="notice-title" required placeholder="e.g. Project kick-off meeting" class="theme-input">
+                    </div>
+                    <div class="field">
+                      <label for="notice-category">Category</label>
+                      <select id="notice-category" class="theme-input">
+                        <option value="general">📢 General</option>
+                        <option value="meeting">📅 Meeting</option>
+                        <option value="closure">🚪 Office Closure</option>
+                        <option value="holiday">🎉 Holiday Notice</option>
+                        <option value="maintenance">🛠️ Server Maintenance</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
-                <div class="field">
-                  <label>Message</label>
-                  <textarea id="notice-message" rows="2" required placeholder="Details for the team..."></textarea>
-                </div>
-                <label class="checkbox-label">
-                  <input type="checkbox" id="notice-pinned"> Pin to top
-                </label>
-                <button type="submit" class="btn-primary" style="margin-top:12px;">Post announcement</button>
-                <div class="msg" id="notice-msg"></div>
-              </form>
+
+                  <div class="row2">
+                    <div class="field">
+                      <label for="notice-event-at">Meeting / event date and time <span style="font-weight:normal;opacity:0.75;">(optional)</span></label>
+                      <input type="datetime-local" id="notice-event-at" class="theme-input" style="min-height:44px;">
+                    </div>
+                    <div class="field" id="notice-reminders-box">
+                      <label>Scheduled Reminders</label>
+                      <div class="notice-reminders-grid">
+                        <label class="checkbox-label notice-remind-chip">
+                          <input type="checkbox" id="notice-remind-0" value="0" checked>
+                          <span>At start</span>
+                        </label>
+                        <label class="checkbox-label notice-remind-chip">
+                          <input type="checkbox" id="notice-remind-15" value="15" checked>
+                          <span>15 min before</span>
+                        </label>
+                        <label class="checkbox-label notice-remind-chip">
+                          <input type="checkbox" id="notice-remind-60" value="60">
+                          <span>1 hr before</span>
+                        </label>
+                        <label class="checkbox-label notice-remind-chip">
+                          <input type="checkbox" id="notice-remind-1440" value="1440">
+                          <span>1 day before</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="notice-message">Message</label>
+                    <textarea id="notice-message" rows="2" required placeholder="Meeting agenda, location, or details for the team..." class="theme-input"></textarea>
+                  </div>
+
+                  <div class="notice-form-options" style="display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 16px 0;">
+                    <label class="checkbox-label" style="min-height:44px;display:inline-flex;align-items:center;">
+                      <input type="checkbox" id="notice-notify-now">
+                      <span><strong>Notify employees now</strong> (in-app & push)</span>
+                    </label>
+                    <label class="checkbox-label" style="min-height:44px;display:inline-flex;align-items:center;">
+                      <input type="checkbox" id="notice-pinned">
+                      <span>📌 Pin to top</span>
+                    </label>
+                  </div>
+
+                  <div class="notice-form-actions" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <button type="submit" id="notice-submit-btn" class="btn-primary" style="min-height:44px;padding:0 20px;">Post announcement</button>
+                    <button type="button" id="notice-cancel-btn" class="btn-secondary hidden" style="min-height:44px;padding:0 16px;">Cancel edit</button>
+                  </div>
+                  <div class="msg" id="notice-msg"></div>
+                </form>
+              </div>
+
               <div class="notice-list" id="notice-list-boss" style="margin-top:20px;"></div>
             </div>
 

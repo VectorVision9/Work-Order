@@ -6699,6 +6699,187 @@ body.app-theme .pw-toggle-btn:hover {
   }
 }
 
+/* =========================================================
+   Announcement Board & Scheduled Meeting Reminders
+   ========================================================= */
+.notice-form-wrap {
+  margin-top: 10px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--paper-line);
+  border-radius: 10px;
+}
+body.app-theme .notice-form-wrap {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.notice-edit-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 8px;
+  color: #1E40AF;
+}
+body.app-theme .notice-edit-banner {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93C5FD;
+}
+.notice-edit-note {
+  font-size: 12px;
+  margin: 4px 0 0 0;
+  opacity: 0.9;
+}
+.notice-reminders-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.notice-remind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--paper-line);
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+}
+body.app-theme .notice-remind-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #CBD5E1;
+}
+.notice-remind-chip input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Event Badges on Notice Cards */
+.notice-event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+.notice-event-badge.is-upcoming {
+  background: #EEF2FF;
+  color: #4338CA;
+  border: 1px solid #C7D2FE;
+}
+body.app-theme .notice-event-badge.is-upcoming {
+  background: rgba(99, 102, 241, 0.2);
+  color: #A5B4FC;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+.notice-event-badge.is-imminent {
+  background: #FEE2E2;
+  color: #B91C1C;
+  border: 1px solid #FCA5A5;
+  animation: imminentPulse 1.5s infinite;
+}
+body.app-theme .notice-event-badge.is-imminent {
+  background: rgba(239, 68, 68, 0.22);
+  color: #FCA5A5;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+.notice-event-badge.is-passed {
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #CBD5E1;
+}
+body.app-theme .notice-event-badge.is-passed {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94A3B8;
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+@keyframes imminentPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+/* Notice Card Muted After Event Passed */
+.notice-card.notice-card-passed {
+  opacity: 0.65;
+  filter: grayscale(0.25);
+}
+.notice-card.notice-card-passed:hover {
+  opacity: 0.9;
+}
+
+/* Notice Card Highlight on Notification Tap */
+@keyframes noticeHighlightPulse {
+  0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.7); outline: 2px solid #7C3AED; }
+  50% { box-shadow: 0 0 0 10px rgba(124, 58, 237, 0); outline: 2px solid #A78BFA; }
+  100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); outline: 2px solid transparent; }
+}
+.notice-card.notice-card-highlight {
+  animation: noticeHighlightPulse 1.8s ease-in-out 2;
+  border-color: #8B5CF6 !important;
+}
+
+/* Notice Card Actions: min 44px tap targets */
+.notice-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.notice-card .n-edit,
+.notice-card .n-delete {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12.5px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+.notice-card .n-edit {
+  color: var(--primary, #7C3AED);
+}
+body.app-theme .notice-card .n-edit {
+  color: #A78BFA;
+}
+.notice-card .n-edit:hover {
+  background: rgba(124, 58, 237, 0.1);
+}
+.notice-card .n-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+@media (max-width: 360px) {
+  .notice-reminders-grid {
+    flex-direction: column;
+  }
+  .notice-remind-chip {
+    width: 100%;
+  }
+}
+
 
 
 

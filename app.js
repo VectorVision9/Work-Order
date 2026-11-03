@@ -368,17 +368,31 @@ async function onLoggedIn(user) {
     await loadEmployeeData();
   }
 
-  // Handle cold-start notification tap
-  if (pendingNotificationTaskId) {
-    const target = pendingNotificationTaskId;
+  // Handle cold-start notification tap or URL hash navigation
+  if (pendingNotificationNoticeId || pendingNotificationTaskId) {
+    const noticeTarget = pendingNotificationNoticeId;
+    const taskTarget = pendingNotificationTaskId;
+    pendingNotificationNoticeId = null;
     pendingNotificationTaskId = null;
+    pendingNotificationType = null;
     setTimeout(() => {
-      if (target === 'dashboard') {
-        showPage('dashboard');
+      if (noticeTarget) {
+        highlightAnnouncement(noticeTarget);
+      } else if (taskTarget && taskTarget !== 'dashboard') {
+        openTaskDetail(taskTarget, { source: 'notification' });
       } else {
-        openTaskDetail(target, { source: 'notification' });
+        showPage('dashboard');
       }
-    }, 150);
+    }, 200);
+  } else {
+    const hash = window.location.hash || '';
+    if (hash.startsWith('#notice=')) {
+      const nId = hash.replace('#notice=', '');
+      if (nId) setTimeout(() => highlightAnnouncement(nId), 250);
+    } else if (hash.startsWith('#task=')) {
+      const tId = hash.replace('#task=', '');
+      if (tId) setTimeout(() => openTaskDetail(tId, { source: 'notification' }), 250);
+    }
   }
 }
 
@@ -879,6 +893,74 @@ $('download-pdf-btn').addEventListener('click', async () => {
 // NOTICES & ANNOUNCEMENTS (visible to boss + all employees)
 // =========================================================
 let noticesCache = [];
+let editingNoticeId = null;
+let isNoticeFormExpanded = true;
+
+function toDatetimeLocalValue(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const mins = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${mins}`;
+}
+
+function formatNoticeEventTime(eventAtStr) {
+  if (!eventAtStr) return null;
+  const eventDate = new Date(eventAtStr);
+  if (isNaN(eventDate.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = eventDate.getTime() - now.getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  const isPassed = diffMs < 0;
+  const isUnderOneHour = !isPassed && diffMins <= 60;
+
+  const timeStr = eventDate.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+
+  let badgeText = '';
+
+  if (isUnderOneHour) {
+    if (diffMins <= 1) {
+      badgeText = 'Starting now';
+    } else {
+      badgeText = `Starts in ${diffMins} min`;
+    }
+  } else {
+    const todayStr = toDateStr(now);
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = toDateStr(tomorrow);
+    const eventDateStr = toDateStr(eventDate);
+
+    if (eventDateStr === todayStr) {
+      badgeText = (isPassed ? 'Passed · Today ' : 'Today ') + timeStr;
+    } else if (eventDateStr === tomorrowStr) {
+      badgeText = 'Tomorrow ' + timeStr;
+    } else {
+      const dateStr = eventDate.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric'
+      });
+      badgeText = (isPassed ? 'Passed · ' : '') + `${dateStr}, ${timeStr}`;
+    }
+  }
+
+  return {
+    badgeText,
+    isUnderOneHour,
+    isPassed,
+    timeStr,
+    eventDate
+  };
+}
 
 async function loadNotices() {
   const { data, error } = await sb
@@ -913,19 +995,41 @@ function renderNotices() {
       year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
     });
     const icon = categoryIcon[n.category] || '📢';
+    const eventBadgeInfo = n.event_at ? formatNoticeEventTime(n.event_at) : null;
+    const isPassed = Boolean(eventBadgeInfo?.isPassed);
+
     const card = document.createElement('div');
-    card.className = 'notice-card' + (n.pinned ? ' pinned' : '');
+    card.className = 'notice-card' + (n.pinned ? ' pinned' : '') + (isPassed ? ' notice-card-passed' : '');
+    card.dataset.noticeId = n.id;
+
+    let eventBadgeHtml = '';
+    if (eventBadgeInfo) {
+      const cls = eventBadgeInfo.isUnderOneHour ? 'is-imminent' : (isPassed ? 'is-passed' : 'is-upcoming');
+      eventBadgeHtml = `<div class="notice-event-badge ${cls}">📅 ${escapeHtml(eventBadgeInfo.badgeText)}</div>`;
+    }
+
     card.innerHTML = `
       <div class="n-top">
-        <div class="n-title">${n.pinned ? '<span class="n-pin">📌</span>' : ''}<span class="n-cat-icon">${icon}</span>${escapeHtml(n.title)}</div>
-        ${isBoss ? `<button class="n-delete" data-delete-notice="${n.id}">Delete</button>` : ''}
+        <div class="n-title">
+          ${n.pinned ? '<span class="n-pin">📌</span>' : ''}
+          <span class="n-cat-icon">${icon}</span>
+          ${escapeHtml(n.title)}
+        </div>
+        ${isBoss ? `
+          <div class="notice-card-actions">
+            <button type="button" class="n-edit" data-edit-notice="${n.id}" title="Edit announcement" aria-label="Edit announcement">Edit</button>
+            <button type="button" class="n-delete" data-delete-notice="${n.id}" title="Delete announcement" aria-label="Delete announcement">Delete</button>
+          </div>
+        ` : ''}
       </div>
+      ${eventBadgeHtml}
       <div class="n-msg">${escapeHtml(n.message)}</div>
       <div class="n-meta">Posted by ${escapeHtml(n.author?.full_name || 'Boss')} · ${when}</div>
     `;
     list.appendChild(card);
   });
 
+  // Attach delete handlers
   list.querySelectorAll('button[data-delete-notice]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const ok = confirm('Delete this notice?');
@@ -937,12 +1041,134 @@ function renderNotices() {
         btn.disabled = false;
         return;
       }
+      if (editingNoticeId === btn.dataset.deleteNotice) {
+        cancelNoticeEdit();
+      }
       await loadNotices();
+    });
+  });
+
+  // Attach edit handlers
+  list.querySelectorAll('button[data-edit-notice]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      startEditNotice(btn.dataset.editNotice);
     });
   });
 }
 
-$('notice-form').addEventListener('submit', async (e) => {
+function startEditNotice(noticeId) {
+  const n = noticesCache.find(x => x.id === noticeId);
+  if (!n) return;
+
+  editingNoticeId = noticeId;
+  $('notice-edit-id').value = noticeId;
+  $('notice-title').value = n.title || '';
+  $('notice-category').value = n.category || 'general';
+  $('notice-message').value = n.message || '';
+  $('notice-pinned').checked = Boolean(n.pinned);
+
+  if (n.event_at) {
+    $('notice-event-at').value = toDatetimeLocalValue(n.event_at);
+  } else {
+    $('notice-event-at').value = '';
+  }
+
+  const offsets = Array.isArray(n.remind_offsets) ? n.remind_offsets : [0];
+  $('notice-remind-0').checked = offsets.includes(0);
+  $('notice-remind-15').checked = offsets.includes(15);
+  $('notice-remind-60').checked = offsets.includes(60);
+  $('notice-remind-1440').checked = offsets.includes(1440);
+
+  // Notify now default: checked for meeting category, unchecked otherwise
+  $('notice-notify-now').checked = (n.category === 'meeting');
+
+  // Show edit banner with note
+  $('notice-edit-banner')?.classList.remove('hidden');
+  $('notice-submit-btn').textContent = 'Save Changes';
+  $('notice-cancel-btn')?.classList.remove('hidden');
+
+  // Expand form wrap if hidden
+  toggleNoticeForm(true);
+
+  const wrap = $('notice-form-wrap');
+  if (wrap) {
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  setTimeout(() => $('notice-title')?.focus(), 150);
+}
+
+function cancelNoticeEdit() {
+  editingNoticeId = null;
+  const form = $('notice-form');
+  if (form) form.reset();
+  $('notice-edit-id').value = '';
+  $('notice-edit-banner')?.classList.add('hidden');
+  $('notice-submit-btn').textContent = 'Post announcement';
+  $('notice-cancel-btn')?.classList.add('hidden');
+  $('notice-remind-0').checked = true;
+  $('notice-remind-15').checked = true;
+  $('notice-remind-60').checked = false;
+  $('notice-remind-1440').checked = false;
+  $('notice-notify-now').checked = ($('notice-category')?.value === 'meeting');
+  const msg = $('notice-msg');
+  if (msg) { msg.textContent = ''; msg.className = 'msg'; }
+}
+
+function toggleNoticeForm(forceOpen) {
+  const wrap = $('notice-form-wrap');
+  const icon = $('notice-toggle-icon');
+  const text = $('notice-toggle-text');
+  if (!wrap) return;
+
+  if (typeof forceOpen === 'boolean') {
+    isNoticeFormExpanded = forceOpen;
+  } else {
+    isNoticeFormExpanded = !isNoticeFormExpanded;
+  }
+
+  wrap.classList.toggle('hidden', !isNoticeFormExpanded);
+  if (icon) icon.textContent = isNoticeFormExpanded ? '▲' : '➕';
+  if (text) text.textContent = isNoticeFormExpanded ? 'Hide Form' : 'New Announcement';
+}
+
+async function highlightAnnouncement(noticeId) {
+  showPage('dashboard');
+  if (!noticesCache || noticesCache.length === 0) {
+    await loadNotices();
+  }
+  const isBoss = currentProfile?.role === 'boss';
+  const list = $(isBoss ? 'notice-list-boss' : 'notice-list-emp');
+  if (!list) return;
+
+  let card = noticeId ? list.querySelector(`[data-notice-id="${noticeId}"]`) : null;
+  if (!card) {
+    card = list.firstElementChild;
+  }
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.remove('notice-card-highlight');
+    void card.offsetWidth;
+    card.classList.add('notice-card-highlight');
+    setTimeout(() => {
+      card.classList.remove('notice-card-highlight');
+    }, 3500);
+  }
+}
+
+// Wire form buttons & category changes
+$('notice-cancel-btn')?.addEventListener('click', cancelNoticeEdit);
+$('notice-cancel-banner-btn')?.addEventListener('click', cancelNoticeEdit);
+$('notice-toggle-form-btn')?.addEventListener('click', () => toggleNoticeForm());
+
+$('notice-category')?.addEventListener('change', (e) => {
+  const isMeeting = e.target.value === 'meeting';
+  const notifyNowEl = $('notice-notify-now');
+  if (notifyNowEl) {
+    notifyNowEl.checked = isMeeting;
+  }
+});
+
+$('notice-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = $('notice-msg');
   msg.textContent = '';
@@ -952,22 +1178,101 @@ $('notice-form').addEventListener('submit', async (e) => {
   const message = $('notice-message').value.trim();
   const pinned = $('notice-pinned').checked;
   const category = $('notice-category').value;
+  const rawEventVal = $('notice-event-at')?.value;
+  const notifyNow = Boolean($('notice-notify-now')?.checked);
 
-  const { error } = await sb.from('notices').insert({
-    title, message, pinned, category,
-    created_by: currentUser.id
-  });
-
-  if (error) {
-    msg.textContent = error.message;
-    msg.className = 'msg err';
-    return;
+  let eventAtIso = null;
+  if (rawEventVal) {
+    const d = new Date(rawEventVal);
+    if (isNaN(d.getTime())) {
+      msg.textContent = 'Invalid meeting / event date and time.';
+      msg.className = 'msg err';
+      return;
+    }
+    if (d.getTime() <= Date.now()) {
+      msg.textContent = 'Meeting / event date and time must be in the future.';
+      msg.className = 'msg err';
+      return;
+    }
+    eventAtIso = d.toISOString();
   }
 
-  msg.textContent = 'Announcement posted.';
-  msg.className = 'msg ok';
-  e.target.reset();
-  await loadNotices();
+  // Collect checked reminder offsets
+  const remindOffsets = [];
+  if ($('notice-remind-0')?.checked) remindOffsets.push(0);
+  if ($('notice-remind-15')?.checked) remindOffsets.push(15);
+  if ($('notice-remind-60')?.checked) remindOffsets.push(60);
+  if ($('notice-remind-1440')?.checked) remindOffsets.push(1440);
+  if (eventAtIso && remindOffsets.length === 0) {
+    remindOffsets.push(0);
+  }
+
+  const submitBtn = $('notice-submit-btn');
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    let savedNoticeId = editingNoticeId;
+
+    if (editingNoticeId) {
+      // Update existing announcement
+      const { error } = await sb.from('notices').update({
+        title,
+        message,
+        pinned,
+        category,
+        event_at: eventAtIso,
+        remind_offsets: remindOffsets
+      }).eq('id', editingNoticeId);
+
+      if (error) throw error;
+      msg.textContent = 'Announcement updated successfully.';
+      msg.className = 'msg ok';
+    } else {
+      // Create new announcement
+      const { data: inserted, error } = await sb.from('notices').insert({
+        title,
+        message,
+        pinned,
+        category,
+        event_at: eventAtIso,
+        remind_offsets: remindOffsets,
+        created_by: currentUser.id
+      }).select('id').single();
+
+      if (error) throw error;
+      savedNoticeId = inserted?.id;
+      msg.textContent = 'Announcement posted successfully.';
+      msg.className = 'msg ok';
+    }
+
+    // Immediately notify employees if checkbox was checked
+    if (notifyNow && savedNoticeId) {
+      let empList = employeeDirectoryCache;
+      if (!empList || empList.length === 0) {
+        const { data: emps } = await sb.from('profiles').select('id').eq('role', 'employee');
+        empList = emps || [];
+      }
+      if (empList.length > 0) {
+        const notifs = empList.map(emp => ({
+          user_id: emp.id,
+          type: 'announcement',
+          notice_id: savedNoticeId,
+          title: (category === 'meeting' ? '📅 Meeting: ' : '📢 Announcement: ') + title,
+          message: message.slice(0, 200)
+        }));
+        await sb.from('notifications').insert(notifs);
+      }
+    }
+
+    cancelNoticeEdit();
+    await loadNotices();
+  } catch (err) {
+    console.error('Error saving announcement:', err);
+    msg.textContent = err?.message || 'Could not save announcement';
+    msg.className = 'msg err';
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
 });
 
 // =========================================================
@@ -4766,6 +5071,8 @@ try {
 } catch (e) {}
 let nativePushListenersAttached = false;
 let pendingNotificationTaskId = null;
+let pendingNotificationNoticeId = null;
+let pendingNotificationType = null;
 
 function isNativeApp() {
   return Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
@@ -4834,19 +5141,25 @@ function setupNativePushListeners() {
     }
   });
 
-  // User tapped notification: open full task detail view or dashboard
+  // User tapped notification: open full task detail view, announcement, or dashboard
   Push.addListener('pushNotificationActionPerformed', (action) => {
     const data = action?.notification?.data || {};
     const taskId = data.task_id || data.taskId || null;
+    const noticeId = data.notice_id || data.noticeId || null;
+    const notifType = data.type || null;
 
     if (currentUser && currentProfile) {
-      if (taskId) {
+      if (notifType === 'meeting_reminder' || notifType === 'announcement' || (noticeId && !taskId)) {
+        highlightAnnouncement(noticeId);
+      } else if (taskId) {
         openTaskDetail(taskId, { source: 'notification' });
       } else {
         showPage('dashboard');
       }
     } else {
-      pendingNotificationTaskId = taskId || 'dashboard';
+      pendingNotificationTaskId = taskId || null;
+      pendingNotificationNoticeId = noticeId || null;
+      pendingNotificationType = notifType || null;
     }
   });
 }
@@ -5219,7 +5532,8 @@ async function loadNotifications(limit = notifDisplayLimit) {
 
 const NOTIF_ICON = {
   task_assigned: '🔴', task_reassigned: '🔄', task_accepted: '🟢', task_started: '🟡', task_completed: '🟢',
-  comment: '💬', deadline_tomorrow: '🟡', overdue: '⚠️', employee_added: '🔵'
+  comment: '💬', deadline_tomorrow: '🟡', overdue: '⚠️', employee_added: '🔵',
+  announcement: '📢', meeting_reminder: '📅'
 };
 
 function timeAgo(dateStr) {
@@ -5314,7 +5628,7 @@ function renderNotificationBell() {
       <div class="notif-day-header">${escapeHtml(g.label)}</div>
       <div class="notif-day-items">
         ${g.items.map(n => `
-          <div class="notif-row ${n.read ? '' : 'unread'}" data-notif-id="${n.id}" data-task-id="${n.task_id || ''}" role="button" tabindex="0">
+          <div class="notif-row ${n.read ? '' : 'unread'}" data-notif-id="${n.id}" data-task-id="${n.task_id || ''}" data-notice-id="${n.notice_id || ''}" data-notif-type="${n.type || ''}" role="button" tabindex="0">
             <span class="notif-icon">${NOTIF_ICON[n.type] || '🔔'}</span>
             <div class="notif-info">
               <div class="notif-title">${escapeHtml(n.title)}</div>
@@ -5336,6 +5650,8 @@ function renderNotificationBell() {
 
       const id = row.dataset.notifId;
       const taskId = row.dataset.taskId;
+      const noticeId = row.dataset.noticeId;
+      const notifType = row.dataset.notifType;
       const n = notificationsCache.find(x => x.id === id);
       if (n && !n.read) {
         n.read = true;
@@ -5343,7 +5659,9 @@ function renderNotificationBell() {
         await sb.from('notifications').update({ read: true }).eq('id', id);
       }
       $('notif-panel')?.classList.add('hidden');
-      if (taskId) {
+      if (notifType === 'meeting_reminder' || notifType === 'announcement' || (noticeId && !taskId)) {
+        highlightAnnouncement(noticeId);
+      } else if (taskId) {
         openTaskDetail(taskId, { source: 'notification' });
       }
     });
@@ -5990,14 +6308,23 @@ function renderCalendarGrid() {
     }
   });
 
-  // Get notices map by posted date
+  // Get notices map by event date OR posted date
   const noticesMap = new Map();
-  if (calShowAnnouncements && noticesCache) {
+  if (noticesCache) {
     noticesCache.forEach(n => {
-      if (n.created_at) {
-        const dStr = n.created_at.slice(0, 10);
-        if (!noticesMap.has(dStr)) noticesMap.set(dStr, []);
-        noticesMap.get(dStr).push(n);
+      const eventDStr = n.event_at ? toDateStr(new Date(n.event_at)) : null;
+      const postedDStr = n.created_at ? n.created_at.slice(0, 10) : null;
+      if (eventDStr) {
+        if (!noticesMap.has(eventDStr)) noticesMap.set(eventDStr, []);
+        if (!noticesMap.get(eventDStr).some(x => x.id === n.id)) {
+          noticesMap.get(eventDStr).push(n);
+        }
+      }
+      if (calShowAnnouncements && postedDStr) {
+        if (!noticesMap.has(postedDStr)) noticesMap.set(postedDStr, []);
+        if (!noticesMap.get(postedDStr).some(x => x.id === n.id)) {
+          noticesMap.get(postedDStr).push(n);
+        }
       }
     });
   }
@@ -6222,13 +6549,17 @@ function renderCalendarSelectedDay() {
   ];
   const dayHolidays = holidays.filter(h => h.date === calSelectedDate);
   const tasks = getCalendarFilteredTasks().filter(t => t.deadline === calSelectedDate);
-  const notices = calShowAnnouncements && noticesCache
-    ? noticesCache.filter(n => n.created_at && n.created_at.slice(0, 10) === calSelectedDate)
-    : [];
+  const notices = (noticesCache || []).filter(n => {
+    const eventDStr = n.event_at ? toDateStr(new Date(n.event_at)) : null;
+    const postedDStr = n.created_at ? n.created_at.slice(0, 10) : null;
+    if (eventDStr === calSelectedDate) return true;
+    if (calShowAnnouncements && postedDStr === calSelectedDate) return true;
+    return false;
+  });
 
   const showHolidays = (calFilter === 'all' || calFilter === 'holidays') && dayHolidays.length > 0;
   const showTasks = (calFilter === 'all' || calFilter === 'tasks') && tasks.length > 0;
-  const showNotices = calShowAnnouncements && (calFilter === 'all') && notices.length > 0;
+  const showNotices = (calFilter === 'all') && notices.length > 0;
 
   const totalItems = (showHolidays ? dayHolidays.length : 0) + (showTasks ? tasks.length : 0) + (showNotices ? notices.length : 0);
   if (subEl) {
@@ -6293,16 +6624,20 @@ function renderCalendarSelectedDay() {
     });
   }
 
-  // 3. Announcements
+  // 3. Announcements & Scheduled Meetings
   if (showNotices) {
     notices.forEach(n => {
       const authorName = n.author?.full_name || 'Admin';
+      const eventBadgeInfo = n.event_at ? formatNoticeEventTime(n.event_at) : null;
+      const eventBadgeHtml = eventBadgeInfo
+        ? `<span class="notice-event-badge ${eventBadgeInfo.isUnderOneHour ? 'is-imminent' : (eventBadgeInfo.isPassed ? 'is-passed' : 'is-upcoming')}" style="margin-left:6px;font-size:11px;">📅 ${escapeHtml(eventBadgeInfo.badgeText)}</span>`
+        : '';
       html += `
-        <div class="cal-card cal-notice-card">
-          <div class="cal-card-title">📢 ${escapeHtml(n.title)}</div>
+        <div class="cal-card cal-notice-card cal-card-clickable" data-notice-id="${n.id}" title="Click to view on Announcement Board">
+          <div class="cal-card-title">📢 ${escapeHtml(n.title)} ${eventBadgeHtml}</div>
           <div class="cal-card-meta">
             <span class="cal-card-author">By ${escapeHtml(authorName)}</span>
-            <span class="tag" style="background:#EDE9FE;color:#5B21B6;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">Notice</span>
+            <span class="tag" style="background:#EDE9FE;color:#5B21B6;font-weight:600;padding:2px 8px;border-radius:4px;font-size:11px;">${escapeHtml(n.category || 'Notice')}</span>
           </div>
         </div>
       `;
@@ -6316,6 +6651,14 @@ function renderCalendarSelectedDay() {
     card.addEventListener('click', () => {
       const taskId = card.dataset.taskId;
       openTaskDetail(taskId, { source: 'calendar' });
+    });
+  });
+
+  // Add click handlers on announcement cards to navigate to Announcement Board
+  contentEl.querySelectorAll('.cal-notice-card.cal-card-clickable').forEach(card => {
+    card.addEventListener('click', () => {
+      const noticeId = card.dataset.noticeId;
+      highlightAnnouncement(noticeId);
     });
   });
 }
@@ -6704,6 +7047,12 @@ initSettingsPage();
 let lastBackPressTime = 0;
 
 function handleAppBackButton() {
+  // 0. Close / cancel announcement edit form first if active
+  if (editingNoticeId !== null) {
+    cancelNoticeEdit();
+    return true;
+  }
+
   // 1. Close any open modals
   const openModals = [
     'manage-holidays-modal',
