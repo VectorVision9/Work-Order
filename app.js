@@ -6405,10 +6405,75 @@ if (localStorage.getItem('eoffice-sidebar-collapsed') === '1') {
 }
 
 // ---- shared auto-hide top and bottom bars controller on scroll (mobile) ----
-let lastScrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-let scrollTicking = false;
+// Temporary debug badge flag (set to false or remove once verified)
+const SHOW_SCROLL_DEBUG_BADGE = true;
 
-function shouldPreventBarsHide() {
+let lastScrollY = 0;
+let lastScrollTarget = null;
+let scrollTicking = false;
+let barsAreHidden = false;
+let lastScrollDir = 'idle';
+let currentScrollTarget = null;
+let currentScrollSelector = 'window';
+
+function updateScrollDebugBadge(selector, scrollY, dir, hidden) {
+  if (!SHOW_SCROLL_DEBUG_BADGE) {
+    const existing = $('scroll-debug-badge');
+    if (existing) existing.remove();
+    return;
+  }
+  let badge = $('scroll-debug-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'scroll-debug-badge';
+    badge.style.cssText = [
+      'position:fixed',
+      'bottom:76px',
+      'left:10px',
+      'z-index:999999',
+      'background:rgba(15,23,42,0.92)',
+      'color:#10B981',
+      'border:1px solid #059669',
+      'font-family:ui-monospace,Menlo,Consolas,monospace',
+      'font-size:11px',
+      'line-height:1.35',
+      'padding:5px 8px',
+      'border-radius:6px',
+      'pointer-events:none',
+      'box-shadow:0 4px 12px rgba(0,0,0,0.4)',
+      'max-width:85vw',
+      'white-space:nowrap',
+      'overflow:hidden',
+      'text-overflow:ellipsis'
+    ].join(';') + ';';
+    document.body.appendChild(badge);
+  }
+  const color = hidden ? '#EF4444' : '#10B981';
+  badge.innerHTML = `<span style="color:#94A3B8;">scroller:</span> <b>${selector || 'window'}</b> | <span style="color:#94A3B8;">y:</span> ${Math.round(scrollY || 0)} | <span style="color:#94A3B8;">dir:</span> ${dir || 'idle'} | <span style="color:${color};font-weight:bold;">hidden: ${Boolean(hidden)}</span>`;
+}
+
+function getScrollInfo(e) {
+  const rawTarget = e ? e.target : null;
+  const isDoc = !rawTarget || rawTarget === document || rawTarget === window || rawTarget === document.documentElement || rawTarget === document.body;
+  const target = isDoc ? (document.scrollingElement || document.documentElement || document.body) : rawTarget;
+  const scrollY = isDoc
+    ? (window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0)
+    : (target.scrollTop || 0);
+
+  let selector = 'window';
+  if (!isDoc && target) {
+    if (target.id) {
+      selector = '#' + target.id;
+    } else if (target.className && typeof target.className === 'string') {
+      selector = target.tagName.toLowerCase() + '.' + target.className.trim().split(/\s+/).slice(0, 2).join('.');
+    } else if (target.tagName) {
+      selector = target.tagName.toLowerCase();
+    }
+  }
+  return { isDoc, target, scrollY, selector };
+}
+
+function shouldPreventBarsHide(target, isDoc = true) {
   // Desktop does not hide bars
   if (window.innerWidth > 900) return true;
 
@@ -6436,31 +6501,42 @@ function shouldPreventBarsHide() {
     return true;
   }
 
-  // Any modal open
-  const openModal = document.querySelector('.modal-backdrop:not(.hidden), .modal:not(.hidden), .modal-wrap:not(.hidden)');
+  // Any modal open (only check modal-backdrop without .hidden)
+  const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
   if (openModal) {
     return true;
   }
 
   // Full-screen task detail view (keep its own header)
   const fsDetail = document.querySelector('.task-detail-fullscreen, .inbox-split-detail.task-detail-fullscreen');
-  if (fsDetail && !fsDetail.classList.contains('hidden')) {
+  if (fsDetail && !fsDetail.classList.contains('hidden') && fsDetail.offsetParent !== null) {
     return true;
   }
 
-  // Page shorter than the screen (no room to scroll)
-  const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
-  if (scrollHeight <= window.innerHeight + 30) {
-    return true;
+  // Page / container shorter than the viewport (no room to scroll)
+  if (isDoc) {
+    const scrollHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight || 0);
+    if (scrollHeight <= window.innerHeight + 30) {
+      return true;
+    }
+  } else if (target && target.scrollHeight && target.clientHeight) {
+    if (target.scrollHeight <= target.clientHeight + 20) {
+      return true;
+    }
   }
 
   return false;
 }
 
-function setBarsHidden(hide) {
-  if (hide && shouldPreventBarsHide()) {
+function setBarsHidden(hide, info = null) {
+  const isDoc = info ? info.isDoc : (!currentScrollTarget || currentScrollTarget === document || currentScrollTarget === document.documentElement || currentScrollTarget === document.body);
+  const target = info ? info.target : currentScrollTarget;
+
+  if (hide && shouldPreventBarsHide(target, isDoc)) {
     hide = false;
   }
+
+  barsAreHidden = hide;
 
   const bnav = $('bottom-nav');
   const topbar = $('app-topbar') || document.querySelector('.topbar');
@@ -6474,30 +6550,56 @@ function setBarsHidden(hide) {
     bnav?.classList.remove('nav-hidden');
     topbar?.classList.remove('topbar-hidden');
   }
+
+  const scrollY = info ? info.scrollY : (window.pageYOffset || document.documentElement.scrollTop || 0);
+  const selector = info ? info.selector : (currentScrollSelector || 'window');
+  updateScrollDebugBadge(selector, scrollY, lastScrollDir, barsAreHidden);
 }
 
 function showBars() {
+  lastScrollY = 0;
+  lastScrollTarget = null;
+  lastScrollDir = 'idle';
   setBarsHidden(false);
 }
 
-window.addEventListener('scroll', () => {
+document.addEventListener('scroll', (e) => {
+  const info = getScrollInfo(e);
+  currentScrollTarget = info.target;
+  currentScrollSelector = info.selector;
+
   if (!scrollTicking) {
     window.requestAnimationFrame(() => {
-      const currentScrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      const currentScrollY = info.scrollY;
+
+      // Reset baseline when scrolling target changes
+      if (lastScrollTarget !== info.target) {
+        lastScrollTarget = info.target;
+        lastScrollY = currentScrollY;
+      }
+
+      const delta = currentScrollY - lastScrollY;
+      let dir = 'idle';
+      if (delta > 0) dir = 'down';
+      else if (delta < 0) dir = 'up';
+      lastScrollDir = dir;
 
       if (window.innerWidth <= 900) {
         if (currentScrollY <= 20) {
-          // Always visible at the very top of the page
-          setBarsHidden(false);
-        } else if (currentScrollY > lastScrollY + 8 && currentScrollY > 60) {
+          // Always visible at the very top of the page / container
+          setBarsHidden(false, info);
+        } else if (delta > 8 && currentScrollY > 60) {
           // Scroll down past 8px threshold hides both
-          setBarsHidden(true);
-        } else if (currentScrollY < lastScrollY - 8) {
+          setBarsHidden(true, info);
+        } else if (delta < -8) {
           // Small scroll up (8px threshold) shows both
-          setBarsHidden(false);
+          setBarsHidden(false, info);
+        } else {
+          // Keep debug badge updated even if inside threshold
+          updateScrollDebugBadge(info.selector, currentScrollY, dir, barsAreHidden);
         }
       } else {
-        setBarsHidden(false);
+        setBarsHidden(false, info);
       }
 
       lastScrollY = Math.max(0, currentScrollY);
@@ -6505,7 +6607,7 @@ window.addEventListener('scroll', () => {
     });
     scrollTicking = true;
   }
-}, { passive: true });
+}, { capture: true, passive: true });
 
 // ---- Quick Create (boss only) ----
 $('qc-new-task').addEventListener('click', () => {

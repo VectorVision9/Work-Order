@@ -3612,7 +3612,10 @@ body.app-theme .picker-opt-btn:hover {
     transition:transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change:transform !important;
   }
-  .topbar.topbar-hidden{
+  .topbar.topbar-hidden,
+  #app-topbar.topbar-hidden,
+  body.bars-hidden .topbar,
+  body.bars-hidden #app-topbar{
     transform:translateY(-100%) !important;
     pointer-events:none !important;
   }
@@ -3727,7 +3730,10 @@ body.app-theme .picker-opt-btn:hover {
     border-top:1px solid rgba(255,255,255,.08) !important;
     box-shadow:0 -4px 20px rgba(0,0,0,.35) !important;
   }
-  .bottom-nav.nav-hidden{
+  .bottom-nav.nav-hidden,
+  #bottom-nav.nav-hidden,
+  body.bars-hidden .bottom-nav,
+  body.bars-hidden #bottom-nav{
     transform:translateY(100%) !important;
     pointer-events:none !important;
   }
