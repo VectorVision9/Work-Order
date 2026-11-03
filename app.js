@@ -974,6 +974,177 @@ async function loadNotices() {
   renderNotices();
 }
 
+function formatNoticeRepeatRule(n) {
+  if (!n.repeat_type || n.repeat_type === 'none') return null;
+
+  let ruleText = '';
+  if (n.repeat_type === 'days') {
+    const days = Array.isArray(n.repeat_days) ? [...n.repeat_days].sort((a, b) => a - b) : [];
+    if (days.length === 7) {
+      ruleText = 'Every day';
+    } else if (days.length === 6 && !days.includes(0)) {
+      ruleText = 'Mon–Sat';
+    } else if (days.length === 5 && !days.includes(0) && !days.includes(6)) {
+      ruleText = 'Mon–Fri';
+    } else {
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      ruleText = days.map(d => dayNames[d]).filter(Boolean).join(', ') || 'Selected days';
+    }
+  } else if (n.repeat_type === 'monthly') {
+    ruleText = `Monthly on day ${n.repeat_day_of_month || 1}`;
+  }
+
+  let timeText = '';
+  if (n.event_at) {
+    const d = new Date(n.event_at);
+    if (!isNaN(d.getTime())) {
+      timeText = d.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+  }
+
+  const fullText = timeText ? `${ruleText} · ${timeText}` : ruleText;
+  return { ruleText, timeText, fullText };
+}
+
+function formatNoticeNextOccurrence(eventAtStr) {
+  if (!eventAtStr) return '';
+  const d = new Date(eventAtStr);
+  if (isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  const todayStr = toDateStr(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = toDateStr(tomorrow);
+  const eventDateStr = toDateStr(d);
+
+  const timeStr = d.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+
+  if (eventDateStr === todayStr) {
+    return 'Today ' + timeStr;
+  } else if (eventDateStr === tomorrowStr) {
+    return 'Tomorrow ' + timeStr;
+  } else {
+    const dateStr = d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric'
+    });
+    return `${dateStr}, ${timeStr}`;
+  }
+}
+
+function syncRepeatFormUI() {
+  const preset = $('notice-repeat-preset')?.value || 'none';
+  const domWrap = $('notice-repeat-dom-wrap');
+  const daysWrap = $('notice-repeat-days-wrap');
+  const remind1440Wrap = $('notice-remind-1440-wrap');
+  const remind1440 = $('notice-remind-1440');
+  const endsType = $('notice-repeat-ends-type')?.value || 'never';
+  const untilInput = $('notice-repeat-until');
+
+  if (domWrap) domWrap.classList.toggle('hidden', preset !== 'monthly');
+  if (daysWrap) daysWrap.classList.toggle('hidden', preset !== 'custom_days');
+
+  // Days checkboxes sync for presets
+  if (preset === 'every_day') {
+    document.querySelectorAll('input[name="notice-day-cb"]').forEach(cb => {
+      cb.checked = true;
+    });
+  } else if (preset === 'mon_sat') {
+    document.querySelectorAll('input[name="notice-day-cb"]').forEach(cb => {
+      cb.checked = (cb.value !== '0');
+    });
+  }
+
+  // Ends until date visibility
+  if (untilInput) {
+    untilInput.classList.toggle('hidden', endsType !== 'on_date');
+  }
+
+  // For repeating announcements, disable the "1 day before" reminder
+  const isRepeating = (preset !== 'none');
+  if (remind1440 && remind1440Wrap) {
+    if (isRepeating) {
+      remind1440.checked = false;
+      remind1440.disabled = true;
+      remind1440Wrap.classList.add('is-disabled');
+    } else {
+      remind1440.disabled = false;
+      remind1440Wrap.classList.remove('is-disabled');
+    }
+  }
+
+  updateNoticeRepeatSummary();
+}
+
+function updateNoticeRepeatSummary() {
+  const summaryEl = $('notice-repeat-summary');
+  if (!summaryEl) return;
+
+  const preset = $('notice-repeat-preset')?.value || 'none';
+  if (preset === 'none') {
+    summaryEl.textContent = 'Does not repeat';
+    return;
+  }
+
+  const rawEventVal = $('notice-event-at')?.value;
+  let timeStr = 'at scheduled time';
+  let isToday = false;
+  if (rawEventVal) {
+    const d = new Date(rawEventVal);
+    if (!isNaN(d.getTime())) {
+      timeStr = 'at ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      isToday = (toDateStr(d) === toDateStr(new Date()));
+    }
+  }
+
+  let repeatText = '';
+  if (preset === 'every_day') {
+    repeatText = `Repeats every day ${timeStr}`;
+  } else if (preset === 'mon_sat') {
+    repeatText = `Repeats Mon–Sat ${timeStr}`;
+  } else if (preset === 'custom_days') {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const checked = Array.from(document.querySelectorAll('input[name="notice-day-cb"]:checked'))
+      .map(cb => parseInt(cb.value, 10))
+      .sort((a, b) => a - b);
+    if (checked.length === 0) {
+      repeatText = `Repeats on selected days ${timeStr}`;
+    } else if (checked.length === 7) {
+      repeatText = `Repeats every day ${timeStr}`;
+    } else {
+      repeatText = `Repeats every ${checked.map(v => dayNames[v]).join(', ')} ${timeStr}`;
+    }
+  } else if (preset === 'monthly') {
+    const dom = parseInt($('notice-repeat-dom')?.value, 10) || 1;
+    repeatText = `Repeats monthly on day ${dom} ${timeStr}`;
+  }
+
+  const skipOffDays = $('notice-skip-off-days')?.checked;
+  if (skipOffDays) {
+    repeatText += ', skipping off days';
+  }
+
+  const endsType = $('notice-repeat-ends-type')?.value;
+  const untilVal = $('notice-repeat-until')?.value;
+  if (endsType === 'on_date' && untilVal) {
+    const ud = new Date(untilVal);
+    if (!isNaN(ud.getTime())) {
+      repeatText += `, until ${ud.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+  } else if (isToday) {
+    repeatText += ', starting today';
+  }
+
+  summaryEl.textContent = repeatText;
+}
+
 function renderNotices() {
   const isBoss = currentProfile?.role === 'boss';
   const list = $(isBoss ? 'notice-list-boss' : 'notice-list-emp');
@@ -995,17 +1166,44 @@ function renderNotices() {
       year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
     });
     const icon = categoryIcon[n.category] || '📢';
+    const isRepeating = Boolean(n.repeat_type && n.repeat_type !== 'none');
+    const repeatInfo = isRepeating ? formatNoticeRepeatRule(n) : null;
     const eventBadgeInfo = n.event_at ? formatNoticeEventTime(n.event_at) : null;
-    const isPassed = Boolean(eventBadgeInfo?.isPassed);
+    const isPassed = !isRepeating && Boolean(eventBadgeInfo?.isPassed);
 
     const card = document.createElement('div');
     card.className = 'notice-card' + (n.pinned ? ' pinned' : '') + (isPassed ? ' notice-card-passed' : '');
     card.dataset.noticeId = n.id;
 
-    let eventBadgeHtml = '';
-    if (eventBadgeInfo) {
+    let timingHtml = '';
+    if (isRepeating) {
+      const nextStr = formatNoticeNextOccurrence(n.event_at);
+      timingHtml = `
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:6px 0 4px 0;">
+          <div class="notice-repeat-info">🔁 ${escapeHtml(repeatInfo?.fullText || 'Repeating')}</div>
+          ${nextStr ? `<div class="notice-event-badge is-upcoming">📅 Next: ${escapeHtml(nextStr)}</div>` : ''}
+          ${n.repeat_paused ? `<span class="badge-paused">⏸ Paused</span>` : ''}
+        </div>
+      `;
+    } else if (eventBadgeInfo) {
       const cls = eventBadgeInfo.isUnderOneHour ? 'is-imminent' : (isPassed ? 'is-passed' : 'is-upcoming');
-      eventBadgeHtml = `<div class="notice-event-badge ${cls}">📅 ${escapeHtml(eventBadgeInfo.badgeText)}</div>`;
+      timingHtml = `<div class="notice-event-badge ${cls}">📅 ${escapeHtml(eventBadgeInfo.badgeText)}</div>`;
+    }
+
+    let actionsHtml = '';
+    if (isBoss) {
+      actionsHtml = `
+        <div class="notice-card-actions">
+          ${isRepeating ? (
+            n.repeat_paused
+              ? `<button type="button" class="n-btn n-resume" data-resume-notice="${n.id}" title="Resume reminders" aria-label="Resume reminders">Resume</button>`
+              : `<button type="button" class="n-btn n-pause" data-pause-notice="${n.id}" title="Pause reminders" aria-label="Pause reminders">Pause</button>`
+          ) : ''}
+          ${isRepeating ? `<button type="button" class="n-btn n-stop-repeat" data-stop-repeat="${n.id}" title="Stop repeating" aria-label="Stop repeating">Stop repeating</button>` : ''}
+          <button type="button" class="n-edit" data-edit-notice="${n.id}" title="Edit announcement" aria-label="Edit announcement">Edit</button>
+          <button type="button" class="n-delete" data-delete-notice="${n.id}" title="Delete announcement" aria-label="Delete announcement">Delete</button>
+        </div>
+      `;
     }
 
     card.innerHTML = `
@@ -1015,14 +1213,9 @@ function renderNotices() {
           <span class="n-cat-icon">${icon}</span>
           ${escapeHtml(n.title)}
         </div>
-        ${isBoss ? `
-          <div class="notice-card-actions">
-            <button type="button" class="n-edit" data-edit-notice="${n.id}" title="Edit announcement" aria-label="Edit announcement">Edit</button>
-            <button type="button" class="n-delete" data-delete-notice="${n.id}" title="Delete announcement" aria-label="Delete announcement">Delete</button>
-          </div>
-        ` : ''}
+        ${actionsHtml}
       </div>
-      ${eventBadgeHtml}
+      ${timingHtml}
       <div class="n-msg">${escapeHtml(n.message)}</div>
       <div class="n-meta">Posted by ${escapeHtml(n.author?.full_name || 'Boss')} · ${when}</div>
     `;
@@ -1054,6 +1247,54 @@ function renderNotices() {
       startEditNotice(btn.dataset.editNotice);
     });
   });
+
+  // Attach pause handlers
+  list.querySelectorAll('button[data-pause-notice]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const { error } = await sb.from('notices').update({ repeat_paused: true }).eq('id', btn.dataset.pauseNotice);
+      if (error) {
+        alert('Could not pause repeating: ' + error.message);
+        btn.disabled = false;
+        return;
+      }
+      await loadNotices();
+    });
+  });
+
+  // Attach resume handlers
+  list.querySelectorAll('button[data-resume-notice]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const { error } = await sb.from('notices').update({ repeat_paused: false }).eq('id', btn.dataset.resumeNotice);
+      if (error) {
+        alert('Could not resume repeating: ' + error.message);
+        btn.disabled = false;
+        return;
+      }
+      await loadNotices();
+    });
+  });
+
+  // Attach stop-repeat handlers
+  list.querySelectorAll('button[data-stop-repeat]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ok = confirm('Stop repeating for this announcement? Future reminders will be cancelled.');
+      if (!ok) return;
+      btn.disabled = true;
+      const { error } = await sb.from('notices').update({
+        repeat_type: 'none',
+        event_at: null,
+        reminded_offsets: []
+      }).eq('id', btn.dataset.stopRepeat);
+      if (error) {
+        alert('Could not stop repeating: ' + error.message);
+        btn.disabled = false;
+        return;
+      }
+      await loadNotices();
+    });
+  });
 }
 
 function startEditNotice(noticeId) {
@@ -1078,6 +1319,46 @@ function startEditNotice(noticeId) {
   $('notice-remind-15').checked = offsets.includes(15);
   $('notice-remind-60').checked = offsets.includes(60);
   $('notice-remind-1440').checked = offsets.includes(1440);
+
+  // Populate repeat controls
+  const presetSelect = $('notice-repeat-preset');
+  const domInput = $('notice-repeat-dom');
+  const endsSelect = $('notice-repeat-ends-type');
+  const untilInput = $('notice-repeat-until');
+  const skipOffDaysCb = $('notice-skip-off-days');
+
+  if (n.repeat_type === 'monthly') {
+    if (presetSelect) presetSelect.value = 'monthly';
+    if (domInput) domInput.value = n.repeat_day_of_month || 1;
+  } else if (n.repeat_type === 'days') {
+    const days = Array.isArray(n.repeat_days) ? [...n.repeat_days].sort((a, b) => a - b) : [];
+    if (days.length === 7) {
+      if (presetSelect) presetSelect.value = 'every_day';
+    } else if (days.length === 6 && !days.includes(0)) {
+      if (presetSelect) presetSelect.value = 'mon_sat';
+    } else {
+      if (presetSelect) presetSelect.value = 'custom_days';
+      document.querySelectorAll('input[name="notice-day-cb"]').forEach(cb => {
+        cb.checked = days.includes(parseInt(cb.value, 10));
+      });
+    }
+  } else {
+    if (presetSelect) presetSelect.value = 'none';
+  }
+
+  if (skipOffDaysCb) {
+    skipOffDaysCb.checked = (n.skip_off_days !== false);
+  }
+
+  if (n.repeat_until) {
+    if (endsSelect) endsSelect.value = 'on_date';
+    if (untilInput) untilInput.value = n.repeat_until;
+  } else {
+    if (endsSelect) endsSelect.value = 'never';
+    if (untilInput) untilInput.value = '';
+  }
+
+  syncRepeatFormUI();
 
   // Notify now default: checked for meeting category, unchecked otherwise
   $('notice-notify-now').checked = (n.category === 'meeting');
@@ -1110,6 +1391,18 @@ function cancelNoticeEdit() {
   $('notice-remind-60').checked = false;
   $('notice-remind-1440').checked = false;
   $('notice-notify-now').checked = ($('notice-category')?.value === 'meeting');
+
+  const presetSelect = $('notice-repeat-preset');
+  if (presetSelect) presetSelect.value = 'none';
+  const endsSelect = $('notice-repeat-ends-type');
+  if (endsSelect) endsSelect.value = 'never';
+  const untilInput = $('notice-repeat-until');
+  if (untilInput) untilInput.value = '';
+  const skipOffDaysCb = $('notice-skip-off-days');
+  if (skipOffDaysCb) skipOffDaysCb.checked = true;
+
+  syncRepeatFormUI();
+
   const msg = $('notice-msg');
   if (msg) { msg.textContent = ''; msg.className = 'msg'; }
 }
@@ -1160,6 +1453,28 @@ $('notice-cancel-btn')?.addEventListener('click', cancelNoticeEdit);
 $('notice-cancel-banner-btn')?.addEventListener('click', cancelNoticeEdit);
 $('notice-toggle-form-btn')?.addEventListener('click', () => toggleNoticeForm());
 
+$('notice-repeat-preset')?.addEventListener('change', syncRepeatFormUI);
+$('notice-repeat-dom')?.addEventListener('input', updateNoticeRepeatSummary);
+$('notice-repeat-ends-type')?.addEventListener('change', syncRepeatFormUI);
+$('notice-repeat-until')?.addEventListener('change', updateNoticeRepeatSummary);
+$('notice-skip-off-days')?.addEventListener('change', updateNoticeRepeatSummary);
+document.querySelectorAll('input[name="notice-day-cb"]').forEach(cb => {
+  cb.addEventListener('change', updateNoticeRepeatSummary);
+});
+$('notice-event-at')?.addEventListener('change', (e) => {
+  if (e.target.value) {
+    const d = new Date(e.target.value);
+    if (!isNaN(d.getTime())) {
+      const domInput = $('notice-repeat-dom');
+      if (domInput && (!domInput.value || domInput.value === '1')) {
+        const dom = Math.min(28, Math.max(1, d.getDate()));
+        domInput.value = dom;
+      }
+    }
+  }
+  updateNoticeRepeatSummary();
+});
+
 $('notice-category')?.addEventListener('change', (e) => {
   const isMeeting = e.target.value === 'meeting';
   const notifyNowEl = $('notice-notify-now');
@@ -1181,6 +1496,57 @@ $('notice-form')?.addEventListener('submit', async (e) => {
   const rawEventVal = $('notice-event-at')?.value;
   const notifyNow = Boolean($('notice-notify-now')?.checked);
 
+  const preset = $('notice-repeat-preset')?.value || 'none';
+  let repeatType = 'none';
+  let repeatDays = [];
+  let repeatDom = null;
+  let repeatUntil = null;
+  let skipOffDays = Boolean($('notice-skip-off-days')?.checked);
+
+  if (rawEventVal && preset !== 'none') {
+    if (preset === 'every_day') {
+      repeatType = 'days';
+      repeatDays = [0, 1, 2, 3, 4, 5, 6];
+    } else if (preset === 'mon_sat') {
+      repeatType = 'days';
+      repeatDays = [1, 2, 3, 4, 5, 6];
+    } else if (preset === 'custom_days') {
+      repeatType = 'days';
+      repeatDays = Array.from(document.querySelectorAll('input[name="notice-day-cb"]:checked'))
+        .map(cb => parseInt(cb.value, 10))
+        .sort((a, b) => a - b);
+      if (repeatDays.length === 0) {
+        msg.textContent = 'Please select at least one day of the week for repeating.';
+        msg.className = 'msg err';
+        return;
+      }
+      if (skipOffDays && repeatDays.length === 1 && repeatDays[0] === 0) {
+        msg.textContent = 'Cannot repeat only on Sundays when skipping Sundays and holidays.';
+        msg.className = 'msg err';
+        return;
+      }
+    } else if (preset === 'monthly') {
+      repeatType = 'monthly';
+      repeatDom = parseInt($('notice-repeat-dom')?.value, 10) || 1;
+      if (repeatDom < 1 || repeatDom > 28) {
+        msg.textContent = 'Day of month must be between 1 and 28.';
+        msg.className = 'msg err';
+        return;
+      }
+    }
+
+    const endsType = $('notice-repeat-ends-type')?.value;
+    if (endsType === 'on_date') {
+      const untilVal = $('notice-repeat-until')?.value;
+      if (!untilVal) {
+        msg.textContent = 'Please select an end date for the repeating announcement.';
+        msg.className = 'msg err';
+        return;
+      }
+      repeatUntil = untilVal;
+    }
+  }
+
   let eventAtIso = null;
   if (rawEventVal) {
     const d = new Date(rawEventVal);
@@ -1189,7 +1555,9 @@ $('notice-form')?.addEventListener('submit', async (e) => {
       msg.className = 'msg err';
       return;
     }
-    if (d.getTime() <= Date.now()) {
+    // For repeating ones, a start time that already passed today is allowed (the database moves it to the next valid time);
+    // for one-time events it must stay in the future.
+    if (repeatType === 'none' && d.getTime() <= Date.now()) {
       msg.textContent = 'Meeting / event date and time must be in the future.';
       msg.className = 'msg err';
       return;
@@ -1202,7 +1570,7 @@ $('notice-form')?.addEventListener('submit', async (e) => {
   if ($('notice-remind-0')?.checked) remindOffsets.push(0);
   if ($('notice-remind-15')?.checked) remindOffsets.push(15);
   if ($('notice-remind-60')?.checked) remindOffsets.push(60);
-  if ($('notice-remind-1440')?.checked) remindOffsets.push(1440);
+  if (repeatType === 'none' && $('notice-remind-1440')?.checked) remindOffsets.push(1440);
   if (eventAtIso && remindOffsets.length === 0) {
     remindOffsets.push(0);
   }
@@ -1211,22 +1579,28 @@ $('notice-form')?.addEventListener('submit', async (e) => {
   if (submitBtn) submitBtn.disabled = true;
 
   try {
+    const wasEditing = Boolean(editingNoticeId);
     let savedNoticeId = editingNoticeId;
+    let savedRecord = null;
 
     if (editingNoticeId) {
       // Update existing announcement
-      const { error } = await sb.from('notices').update({
+      const { data: updated, error } = await sb.from('notices').update({
         title,
         message,
         pinned,
         category,
         event_at: eventAtIso,
-        remind_offsets: remindOffsets
-      }).eq('id', editingNoticeId);
+        remind_offsets: remindOffsets,
+        repeat_type: repeatType,
+        repeat_days: repeatDays,
+        repeat_day_of_month: repeatDom,
+        repeat_until: repeatUntil,
+        skip_off_days: skipOffDays
+      }).eq('id', editingNoticeId).select('id, event_at, repeat_type').single();
 
       if (error) throw error;
-      msg.textContent = 'Announcement updated successfully.';
-      msg.className = 'msg ok';
+      savedRecord = updated;
     } else {
       // Create new announcement
       const { data: inserted, error } = await sb.from('notices').insert({
@@ -1236,13 +1610,18 @@ $('notice-form')?.addEventListener('submit', async (e) => {
         category,
         event_at: eventAtIso,
         remind_offsets: remindOffsets,
+        repeat_type: repeatType,
+        repeat_days: repeatDays,
+        repeat_day_of_month: repeatDom,
+        repeat_until: repeatUntil,
+        skip_off_days: skipOffDays,
+        repeat_paused: false,
         created_by: currentUser.id
-      }).select('id').single();
+      }).select('id, event_at, repeat_type').single();
 
       if (error) throw error;
+      savedRecord = inserted;
       savedNoticeId = inserted?.id;
-      msg.textContent = 'Announcement posted successfully.';
-      msg.className = 'msg ok';
     }
 
     // Immediately notify employees if checkbox was checked
@@ -1264,7 +1643,19 @@ $('notice-form')?.addEventListener('submit', async (e) => {
       }
     }
 
+    // Read back saved event_at to show the real "Next: ..." time
+    let successMsg = wasEditing ? 'Announcement updated successfully.' : 'Announcement posted successfully.';
+    if (repeatType !== 'none' && savedRecord?.event_at) {
+      const realNextStr = formatNoticeNextOccurrence(savedRecord.event_at);
+      if (realNextStr) {
+        successMsg += ` Next: ${realNextStr}`;
+      }
+    }
+
     cancelNoticeEdit();
+    msg.textContent = successMsg;
+    msg.className = 'msg ok';
+
     await loadNotices();
   } catch (err) {
     console.error('Error saving announcement:', err);
@@ -5874,8 +6265,8 @@ function showPage(pageName, pushToHistory = true) {
     renderWorkInbox();
   }
 
-  // Ensure bottom navigation tab is visible upon navigating
-  $('bottom-nav')?.classList.remove('nav-hidden');
+  // Ensure top and bottom navigation bars are visible upon navigating
+  showBars();
 
   // close the mobile sidebar and profile drawer after navigating
   closeEmployeeDrawer();
@@ -6013,23 +6404,102 @@ if (localStorage.getItem('eoffice-sidebar-collapsed') === '1') {
   $('sidebar').classList.add('collapsed');
 }
 
-// ---- auto-hide bottom navigation tab on scroll (mobile) ----
+// ---- shared auto-hide top and bottom bars controller on scroll (mobile) ----
 let lastScrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
 let scrollTicking = false;
+
+function shouldPreventBarsHide() {
+  // Desktop does not hide bars
+  if (window.innerWidth > 900) return true;
+
+  // Active input / textarea / select / contenteditable (keyboard open)
+  const active = document.activeElement;
+  if (active && (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable)) {
+    return true;
+  }
+
+  // Notification center panel open
+  const notifPanel = $('notif-panel');
+  if (notifPanel && !notifPanel.classList.contains('hidden')) {
+    return true;
+  }
+
+  // Mobile sidebar drawer open
+  const sidebar = $('sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    return true;
+  }
+
+  // Employee details drawer / sheet open
+  const empDrawer = $('employee-drawer');
+  if (empDrawer && (empDrawer.classList.contains('open') || !empDrawer.classList.contains('hidden'))) {
+    return true;
+  }
+
+  // Any modal open
+  const openModal = document.querySelector('.modal-backdrop:not(.hidden), .modal:not(.hidden), .modal-wrap:not(.hidden)');
+  if (openModal) {
+    return true;
+  }
+
+  // Full-screen task detail view (keep its own header)
+  const fsDetail = document.querySelector('.task-detail-fullscreen, .inbox-split-detail.task-detail-fullscreen');
+  if (fsDetail && !fsDetail.classList.contains('hidden')) {
+    return true;
+  }
+
+  // Page shorter than the screen (no room to scroll)
+  const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+  if (scrollHeight <= window.innerHeight + 30) {
+    return true;
+  }
+
+  return false;
+}
+
+function setBarsHidden(hide) {
+  if (hide && shouldPreventBarsHide()) {
+    hide = false;
+  }
+
+  const bnav = $('bottom-nav');
+  const topbar = $('app-topbar') || document.querySelector('.topbar');
+
+  if (hide) {
+    document.body.classList.add('bars-hidden');
+    bnav?.classList.add('nav-hidden');
+    topbar?.classList.add('topbar-hidden');
+  } else {
+    document.body.classList.remove('bars-hidden');
+    bnav?.classList.remove('nav-hidden');
+    topbar?.classList.remove('topbar-hidden');
+  }
+}
+
+function showBars() {
+  setBarsHidden(false);
+}
 
 window.addEventListener('scroll', () => {
   if (!scrollTicking) {
     window.requestAnimationFrame(() => {
       const currentScrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-      const bnav = $('bottom-nav');
-      if (bnav && window.innerWidth <= 900) {
-        // When scrolling down / swiping finger up past top bar
-        if (currentScrollY > lastScrollY && currentScrollY > 60) {
-          bnav.classList.add('nav-hidden');
-        } else if (currentScrollY < lastScrollY || currentScrollY <= 20) {
-          bnav.classList.remove('nav-hidden');
+
+      if (window.innerWidth <= 900) {
+        if (currentScrollY <= 20) {
+          // Always visible at the very top of the page
+          setBarsHidden(false);
+        } else if (currentScrollY > lastScrollY + 8 && currentScrollY > 60) {
+          // Scroll down past 8px threshold hides both
+          setBarsHidden(true);
+        } else if (currentScrollY < lastScrollY - 8) {
+          // Small scroll up (8px threshold) shows both
+          setBarsHidden(false);
         }
+      } else {
+        setBarsHidden(false);
       }
+
       lastScrollY = Math.max(0, currentScrollY);
       scrollTicking = false;
     });
@@ -6312,6 +6782,7 @@ function renderCalendarGrid() {
   const noticesMap = new Map();
   if (noticesCache) {
     noticesCache.forEach(n => {
+      const isRepeating = Boolean(n.repeat_type && n.repeat_type !== 'none');
       const eventDStr = n.event_at ? toDateStr(new Date(n.event_at)) : null;
       const postedDStr = n.created_at ? n.created_at.slice(0, 10) : null;
       if (eventDStr) {
@@ -6320,7 +6791,8 @@ function renderCalendarGrid() {
           noticesMap.get(eventDStr).push(n);
         }
       }
-      if (calShowAnnouncements && postedDStr) {
+      // For repeating announcements, show ONLY the next occurrence (never on posted date)
+      if (!isRepeating && calShowAnnouncements && postedDStr) {
         if (!noticesMap.has(postedDStr)) noticesMap.set(postedDStr, []);
         if (!noticesMap.get(postedDStr).some(x => x.id === n.id)) {
           noticesMap.get(postedDStr).push(n);
@@ -6550,10 +7022,11 @@ function renderCalendarSelectedDay() {
   const dayHolidays = holidays.filter(h => h.date === calSelectedDate);
   const tasks = getCalendarFilteredTasks().filter(t => t.deadline === calSelectedDate);
   const notices = (noticesCache || []).filter(n => {
+    const isRepeating = Boolean(n.repeat_type && n.repeat_type !== 'none');
     const eventDStr = n.event_at ? toDateStr(new Date(n.event_at)) : null;
     const postedDStr = n.created_at ? n.created_at.slice(0, 10) : null;
     if (eventDStr === calSelectedDate) return true;
-    if (calShowAnnouncements && postedDStr === calSelectedDate) return true;
+    if (!isRepeating && calShowAnnouncements && postedDStr === calSelectedDate) return true;
     return false;
   });
 
@@ -7047,9 +7520,17 @@ initSettingsPage();
 let lastBackPressTime = 0;
 
 function handleAppBackButton() {
-  // 0. Close / cancel announcement edit form first if active
+  // Reappear both bars when navigating back
+  showBars();
+
+  // 0. Close / cancel announcement edit form first if active or expanded
   if (editingNoticeId !== null) {
     cancelNoticeEdit();
+    return true;
+  }
+  const noticeWrap = $('notice-form-wrap');
+  if (noticeWrap && !noticeWrap.classList.contains('hidden') && isNoticeFormExpanded) {
+    toggleNoticeForm(false);
     return true;
   }
 

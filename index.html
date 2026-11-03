@@ -167,7 +167,8 @@
 
     <!-- ---------- MAIN COLUMN ---------- -->
     <div class="main-column">
-      <div class="topbar">
+      <div class="status-bar-strip" id="status-bar-strip" aria-hidden="true"></div>
+      <div class="topbar" id="app-topbar">
         <div class="topbar-left">
           <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Menu">☰</button>
           <div>
@@ -284,11 +285,66 @@
                           <input type="checkbox" id="notice-remind-60" value="60">
                           <span>1 hr before</span>
                         </label>
-                        <label class="checkbox-label notice-remind-chip">
+                        <label class="checkbox-label notice-remind-chip" id="notice-remind-1440-wrap">
                           <input type="checkbox" id="notice-remind-1440" value="1440">
                           <span>1 day before</span>
                         </label>
                       </div>
+                    </div>
+                  </div>
+
+                  <!-- Repeat Configuration (optional) -->
+                  <div class="notice-repeat-section" id="notice-repeat-section">
+                    <div class="row2">
+                      <div class="field">
+                        <label for="notice-repeat-preset">Repeat</label>
+                        <select id="notice-repeat-preset" class="theme-input" style="min-height:44px;">
+                          <option value="none">Does not repeat</option>
+                          <option value="every_day">Every day</option>
+                          <option value="mon_sat">Mon-Sat</option>
+                          <option value="custom_days">Selected days</option>
+                          <option value="monthly">Monthly on day N (1-28)</option>
+                        </select>
+                      </div>
+
+                      <div class="field hidden" id="notice-repeat-dom-wrap">
+                        <label for="notice-repeat-dom">Day of month (1–28)</label>
+                        <input type="number" id="notice-repeat-dom" min="1" max="28" value="1" class="theme-input" style="min-height:44px;">
+                      </div>
+
+                      <div class="field" id="notice-repeat-ends-wrap">
+                        <label for="notice-repeat-ends-type">Ends</label>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                          <select id="notice-repeat-ends-type" class="theme-input" style="min-height:44px;min-width:110px;">
+                            <option value="never">Never</option>
+                            <option value="on_date">On date</option>
+                          </select>
+                          <input type="date" id="notice-repeat-until" class="theme-input hidden" style="min-height:44px;flex:1;min-width:150px;">
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Selected days chips (Sun..Sat) -->
+                    <div class="field hidden" id="notice-repeat-days-wrap" style="margin-top:6px;">
+                      <label>Select days of week</label>
+                      <div class="notice-days-grid" id="notice-days-grid">
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="0"><span>Sun</span></label>
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="1"><span>Mon</span></label>
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="2"><span>Tue</span></label>
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="3"><span>Wed</span></label>
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="4"><span>Thu</span></label>
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="5"><span>Fri</span></label>
+                        <label class="notice-day-chip"><input type="checkbox" name="notice-day-cb" value="6"><span>Sat</span></label>
+                      </div>
+                    </div>
+
+                    <!-- Skip off days checkbox & summary -->
+                    <div class="notice-repeat-options" style="margin-top:8px;">
+                      <label class="checkbox-label" style="min-height:44px;display:inline-flex;align-items:center;">
+                        <input type="checkbox" id="notice-skip-off-days" checked>
+                        <span>Skip Sundays, 2nd Saturdays and holidays</span>
+                      </label>
+                      <div id="notice-repeat-summary" class="notice-repeat-summary">Does not repeat</div>
                     </div>
                   </div>
 

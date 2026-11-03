@@ -1650,6 +1650,7 @@ body.app-theme .id-card-grid .id-card:nth-child(6){animation-delay:.32s;}
 }
 
 @media (prefers-reduced-motion: reduce){
+  .topbar, .bottom-nav, .status-bar-strip{transition:none !important;animation:none !important;}
   .auth-bg-grid, .blob, body.app-theme #app-view::before{animation:none;}
   body.app-theme .ticket-grid .ticket, body.app-theme .id-card-grid .id-card, body.app-theme .notice-list .notice-card{animation:none;}
 }
@@ -3082,12 +3083,18 @@ body.app-theme .search-empty{color:#94A3B8;}
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
+  --topbar-height: calc(66px + var(--sat));
+  --topbar-offset: var(--topbar-height);
 }
 
 .topbar {
   padding-top: calc(14px + var(--sat));
   padding-left: calc(20px + var(--sal));
   padding-right: calc(20px + var(--sar));
+}
+
+.status-bar-strip {
+  display: none;
 }
 
 /* Bottom navigation bar (mobile only) */
@@ -3559,6 +3566,26 @@ body.app-theme .picker-opt-btn:hover {
   }
 
   /* Mobile Topbar: single row, hamburger far left, title flex:1 truncated, icons right, fixed on top */
+  body.bars-hidden,
+  body.topbar-hidden {
+    --topbar-offset: var(--sat);
+  }
+
+  .status-bar-strip {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: var(--sat) !important;
+    background: #FFFFFF !important;
+    z-index: 95 !important;
+    pointer-events: none !important;
+  }
+  body.app-theme .status-bar-strip {
+    background: #0B1220 !important;
+  }
+
   .topbar{
     display:flex !important;
     flex-direction:row !important;
@@ -3582,6 +3609,12 @@ body.app-theme .picker-opt-btn:hover {
     color:#0F172A !important;
     border-bottom:1px solid var(--paper-line) !important;
     box-shadow:0 2px 10px rgba(0,0,0,.06) !important;
+    transition:transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change:transform !important;
+  }
+  .topbar.topbar-hidden{
+    transform:translateY(-100%) !important;
+    pointer-events:none !important;
   }
   body.app-theme .topbar{
     background:#0B1220 !important;
@@ -3686,8 +3719,8 @@ body.app-theme .picker-opt-btn:hover {
     justify-content:space-around;
     align-items:center;
     box-shadow:0 -4px 20px rgba(0,0,0,.06) !important;
-    transition:transform .28s cubic-bezier(.4, 0, .2, 1);
-    will-change:transform;
+    transition:transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change:transform !important;
   }
   body.app-theme .bottom-nav{
     background:#0B1220 !important;
@@ -6877,6 +6910,152 @@ body.app-theme .notice-card .n-edit {
   }
   .notice-remind-chip {
     width: 100%;
+  }
+}
+
+/* Repeating Reminders & Controls */
+.notice-repeat-section {
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px dashed var(--paper-line, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+body.app-theme .notice-repeat-section {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.notice-days-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.notice-day-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 10px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--paper-line, #CBD5E1);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+}
+body.app-theme .notice-day-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #CBD5E1;
+}
+.notice-day-chip input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.notice-repeat-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary, #7C3AED);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+body.app-theme .notice-repeat-summary {
+  color: #A78BFA;
+}
+.notice-remind-chip.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Repeating announcement indicators on cards */
+.notice-repeat-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4B5563;
+  margin-top: 4px;
+  margin-right: 8px;
+}
+body.app-theme .notice-repeat-info {
+  color: #9CA3AF;
+}
+.badge-paused {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+  margin-left: 6px;
+}
+body.app-theme .badge-paused {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FCD34D;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Boss action buttons on notice card */
+.notice-card .n-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+.notice-card .n-pause {
+  color: #D97706;
+}
+body.app-theme .notice-card .n-pause {
+  color: #FBBF24;
+}
+.notice-card .n-pause:hover {
+  background: rgba(217, 119, 6, 0.1);
+}
+.notice-card .n-resume {
+  color: #16A34A;
+}
+body.app-theme .notice-card .n-resume {
+  color: #4ADE80;
+}
+.notice-card .n-resume:hover {
+  background: rgba(22, 163, 74, 0.1);
+}
+.notice-card .n-stop-repeat {
+  color: #DC2626;
+}
+body.app-theme .notice-card .n-stop-repeat {
+  color: #F87171;
+}
+.notice-card .n-stop-repeat:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+@media (max-width: 480px) {
+  .notice-card-actions {
+    flex-wrap: wrap;
   }
 }
 
