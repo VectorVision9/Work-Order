@@ -82,6 +82,40 @@ setTimeout(() => {
   hideNativeSplash();
 }, 8000);
 
+// ---------- native edge-to-edge safe area insets helper ----------
+async function updateNativeSafeAreaInsets() {
+  if (!isNativeApp()) return;
+  const SystemUi = window.Capacitor?.Plugins?.SystemUi || getCapacitorPlugin('SystemUi');
+  if (!SystemUi || typeof SystemUi.getSafeAreaInsets !== 'function') return;
+
+  try {
+    const insets = await SystemUi.getSafeAreaInsets();
+    if (insets) {
+      if (typeof insets.top === 'number') {
+        document.documentElement.style.setProperty('--safe-top', insets.top + 'px');
+      }
+      if (typeof insets.bottom === 'number') {
+        document.documentElement.style.setProperty('--safe-bottom', insets.bottom + 'px');
+      }
+      if (typeof insets.left === 'number') {
+        document.documentElement.style.setProperty('--safe-left', insets.left + 'px');
+      }
+      if (typeof insets.right === 'number') {
+        document.documentElement.style.setProperty('--safe-right', insets.right + 'px');
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read safe-area insets:', e);
+  }
+}
+
+if (isNativeApp()) {
+  updateNativeSafeAreaInsets();
+  window.addEventListener('resize', updateNativeSafeAreaInsets);
+  window.addEventListener('orientationchange', updateNativeSafeAreaInsets);
+  screen.orientation?.addEventListener('change', updateNativeSafeAreaInsets);
+}
+
 // ---------- cached profile & session helpers ----------
 function getCachedProfile() {
   try {
@@ -225,12 +259,12 @@ $('theme-toggle-btn').addEventListener('click', toggleTheme);
   });
 });
 
-// ---- fullscreen toggle ----
+// ---- fullscreen toggle (desktop / browser) ----
 $('fullscreen-btn').addEventListener('click', () => {
   if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen?.();
+    document.documentElement.requestFullscreen?.().catch(() => {});
   } else {
-    document.exitFullscreen?.();
+    document.exitFullscreen?.().catch(() => {});
   }
 });
 function showApp() {
@@ -6405,52 +6439,12 @@ if (localStorage.getItem('eoffice-sidebar-collapsed') === '1') {
 }
 
 // ---- shared auto-hide top and bottom bars controller on scroll (mobile) ----
-// Temporary debug badge flag (set to false or remove once verified)
-const SHOW_SCROLL_DEBUG_BADGE = true;
-
 let lastScrollY = 0;
 let lastScrollTarget = null;
 let scrollTicking = false;
 let barsAreHidden = false;
-let lastScrollDir = 'idle';
 let currentScrollTarget = null;
 let currentScrollSelector = 'window';
-
-function updateScrollDebugBadge(selector, scrollY, dir, hidden) {
-  if (!SHOW_SCROLL_DEBUG_BADGE) {
-    const existing = $('scroll-debug-badge');
-    if (existing) existing.remove();
-    return;
-  }
-  let badge = $('scroll-debug-badge');
-  if (!badge) {
-    badge = document.createElement('div');
-    badge.id = 'scroll-debug-badge';
-    badge.style.cssText = [
-      'position:fixed',
-      'bottom:76px',
-      'left:10px',
-      'z-index:999999',
-      'background:rgba(15,23,42,0.92)',
-      'color:#10B981',
-      'border:1px solid #059669',
-      'font-family:ui-monospace,Menlo,Consolas,monospace',
-      'font-size:11px',
-      'line-height:1.35',
-      'padding:5px 8px',
-      'border-radius:6px',
-      'pointer-events:none',
-      'box-shadow:0 4px 12px rgba(0,0,0,0.4)',
-      'max-width:85vw',
-      'white-space:nowrap',
-      'overflow:hidden',
-      'text-overflow:ellipsis'
-    ].join(';') + ';';
-    document.body.appendChild(badge);
-  }
-  const color = hidden ? '#EF4444' : '#10B981';
-  badge.innerHTML = `<span style="color:#94A3B8;">scroller:</span> <b>${selector || 'window'}</b> | <span style="color:#94A3B8;">y:</span> ${Math.round(scrollY || 0)} | <span style="color:#94A3B8;">dir:</span> ${dir || 'idle'} | <span style="color:${color};font-weight:bold;">hidden: ${Boolean(hidden)}</span>`;
-}
 
 function getScrollInfo(e) {
   const rawTarget = e ? e.target : null;
@@ -6550,16 +6544,11 @@ function setBarsHidden(hide, info = null) {
     bnav?.classList.remove('nav-hidden');
     topbar?.classList.remove('topbar-hidden');
   }
-
-  const scrollY = info ? info.scrollY : (window.pageYOffset || document.documentElement.scrollTop || 0);
-  const selector = info ? info.selector : (currentScrollSelector || 'window');
-  updateScrollDebugBadge(selector, scrollY, lastScrollDir, barsAreHidden);
 }
 
 function showBars() {
   lastScrollY = 0;
   lastScrollTarget = null;
-  lastScrollDir = 'idle';
   setBarsHidden(false);
 }
 
@@ -6579,10 +6568,6 @@ document.addEventListener('scroll', (e) => {
       }
 
       const delta = currentScrollY - lastScrollY;
-      let dir = 'idle';
-      if (delta > 0) dir = 'down';
-      else if (delta < 0) dir = 'up';
-      lastScrollDir = dir;
 
       if (window.innerWidth <= 900) {
         if (currentScrollY <= 20) {
@@ -6594,9 +6579,6 @@ document.addEventListener('scroll', (e) => {
         } else if (delta < -8) {
           // Small scroll up (8px threshold) shows both
           setBarsHidden(false, info);
-        } else {
-          // Keep debug badge updated even if inside threshold
-          updateScrollDebugBadge(info.selector, currentScrollY, dir, barsAreHidden);
         }
       } else {
         setBarsHidden(false, info);
@@ -7550,8 +7532,11 @@ function initActivityFeed() {
   if (AppPlugin && typeof AppPlugin.addListener === 'function') {
     try {
       AppPlugin.addListener('appStateChange', (state) => {
-        if (state.isActive && currentUser) {
-          loadRecentActivityFeed();
+        if (state.isActive) {
+          updateNativeSafeAreaInsets();
+          if (currentUser) {
+            loadRecentActivityFeed();
+          }
         }
       });
     } catch (e) {

@@ -152,7 +152,7 @@ label{
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:24px;
+  padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
 }
 .auth-card{
   background:var(--paper);
@@ -796,7 +796,7 @@ body.app-theme .history-entry strong{
   flex:1;
   overflow-y:auto;
   overscroll-behavior:contain;
-  padding:24px 26px calc(30px + env(safe-area-inset-bottom, 0px)) 26px;
+  padding:24px 26px calc(30px + var(--safe-bottom)) 26px;
 }
 
 .drawer-avatar{
@@ -991,7 +991,7 @@ body.app-theme .attendance-row button{
     box-shadow:none;
   }
   .drawer-header{
-    padding-top:calc(12px + env(safe-area-inset-top, 0px));
+    padding-top:calc(12px + var(--safe-top));
   }
 }
 
@@ -3079,12 +3079,17 @@ body.app-theme .search-empty{color:#94A3B8;}
 
 /* ---- safe-area-inset variables & support ---- */
 :root {
-  --sat: env(safe-area-inset-top, 0px);
-  --sab: env(safe-area-inset-bottom, 0px);
-  --sal: env(safe-area-inset-left, 0px);
-  --sar: env(safe-area-inset-right, 0px);
-  --topbar-height: calc(66px + var(--sat));
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --sat: var(--safe-top);
+  --sab: var(--safe-bottom);
+  --sal: var(--safe-left);
+  --sar: var(--safe-right);
+  --topbar-height: calc(56px + var(--safe-top));
   --topbar-offset: var(--topbar-height);
+  --keyboard-height: 0px;
 }
 
 .topbar {
@@ -3568,7 +3573,7 @@ body.app-theme .picker-opt-btn:hover {
   /* Mobile Topbar: single row, hamburger far left, title flex:1 truncated, icons right, fixed on top */
   body.bars-hidden,
   body.topbar-hidden {
-    --topbar-offset: var(--sat);
+    --topbar-offset: var(--safe-top);
   }
 
   .status-bar-strip {
@@ -3577,8 +3582,8 @@ body.app-theme .picker-opt-btn:hover {
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    height: var(--sat) !important;
-    background: #FFFFFF !important;
+    height: var(--safe-top) !important;
+    background: #0B1220 !important;
     z-index: 95 !important;
     pointer-events: none !important;
   }
@@ -3595,20 +3600,22 @@ body.app-theme .picker-opt-btn:hover {
     width:100% !important;
     max-width:100% !important;
     margin:0 !important;
-    padding-top:calc(14px + var(--sat)) !important;
-    padding-bottom:14px !important;
-    padding-left:calc(12px + var(--sal)) !important;
-    padding-right:calc(12px + var(--sar)) !important;
+    padding-top:var(--safe-top) !important;
+    height:var(--topbar-height) !important;
+    padding-bottom:0 !important;
+    padding-left:calc(12px + var(--safe-left)) !important;
+    padding-right:calc(12px + var(--safe-right)) !important;
+    box-sizing:border-box !important;
     flex-wrap:nowrap !important;
     position:fixed !important;
     top:0 !important;
     left:0 !important;
     right:0 !important;
     z-index:90 !important;
-    background:#FFFFFF !important;
-    color:#0F172A !important;
-    border-bottom:1px solid var(--paper-line) !important;
-    box-shadow:0 2px 10px rgba(0,0,0,.06) !important;
+    background:#0B1220 !important;
+    color:#FFFFFF !important;
+    border-bottom:1px solid rgba(255,255,255,.08) !important;
+    box-shadow:0 2px 12px rgba(0,0,0,.4) !important;
     transition:transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change:transform !important;
   }
@@ -3644,9 +3651,9 @@ body.app-theme .picker-opt-btn:hover {
     margin:0 !important;
     flex-shrink:0 !important;
     border-radius:10px !important;
-    background:#F1F5F9 !important;
-    border:1px solid var(--paper-line) !important;
-    color:#0F172A !important;
+    background:rgba(255,255,255,.08) !important;
+    border:1px solid rgba(255,255,255,.18) !important;
+    color:#FFFFFF !important;
     font-size:18px !important;
     cursor:pointer !important;
   }
@@ -3668,14 +3675,14 @@ body.app-theme .picker-opt-btn:hover {
     white-space:nowrap !important;
     overflow:hidden !important;
     text-overflow:ellipsis !important;
-    color:#0F172A !important;
+    color:#FFFFFF !important;
   }
   body.app-theme .topbar-left h1{
     color:#FFFFFF !important;
   }
   .topbar-greeting{
     font-size:11.5px !important;
-    color:#64748B !important;
+    color:#94A3B8 !important;
     white-space:nowrap !important;
     overflow:hidden !important;
     text-overflow:ellipsis !important;
@@ -3695,9 +3702,9 @@ body.app-theme .picker-opt-btn:hover {
     margin-left:auto !important;
   }
   .topbar-right button{
-    background:#F1F5F9 !important;
-    border:1px solid var(--paper-line) !important;
-    color:#0F172A !important;
+    background:rgba(255,255,255,.08) !important;
+    border:1px solid rgba(255,255,255,.18) !important;
+    color:#FFFFFF !important;
   }
   body.app-theme .topbar-right button{
     background:rgba(255,255,255,.08) !important;
@@ -3718,7 +3725,7 @@ body.app-theme .picker-opt-btn:hover {
     z-index:80;
     background:#FFFFFF !important;
     border-top:1px solid var(--paper-line) !important;
-    padding:6px calc(12px + var(--sar)) calc(6px + var(--sab)) calc(12px + var(--sal));
+    padding:8px calc(12px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(12px + var(--safe-left)) !important;
     justify-content:space-around;
     align-items:center;
     box-shadow:0 -4px 20px rgba(0,0,0,.06) !important;
@@ -3729,6 +3736,10 @@ body.app-theme .picker-opt-btn:hover {
     background:#0B1220 !important;
     border-top:1px solid rgba(255,255,255,.08) !important;
     box-shadow:0 -4px 20px rgba(0,0,0,.35) !important;
+  }
+  body.keyboard-open .bottom-nav{
+    transform:translateY(100%) !important;
+    pointer-events:none !important;
   }
   .bottom-nav.nav-hidden,
   #bottom-nav.nav-hidden,
@@ -3806,7 +3817,7 @@ body.app-theme .picker-opt-btn:hover {
 
   /* Extra bottom padding on main content so bottom-nav doesn't cover elements */
   main{
-    padding-bottom:calc(80px + var(--sab)) !important;
+    padding-bottom:calc(80px + var(--safe-bottom)) !important;
   }
 }
 
@@ -4075,7 +4086,7 @@ body.app-theme #app-view .idc-split-bottom h3{color:#fff;}
     overflow-x: clip !important;
   }
   main {
-    padding: calc(66px + var(--sat) + 16px) 12px calc(80px + var(--sab)) 12px !important;
+    padding: calc(var(--topbar-height) + 16px) 12px calc(80px + var(--safe-bottom)) 12px !important;
   }
   .panel,
   .quote-banner,
@@ -5934,8 +5945,8 @@ body.app-theme .cal-empty-msg {
     max-height: 100dvh !important;
     border-radius: 0 !important;
     padding: 16px !important;
-    padding-top: calc(14px + env(safe-area-inset-top, 0px)) !important;
-    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-top: calc(14px + var(--safe-top)) !important;
+    padding-bottom: calc(14px + var(--safe-bottom)) !important;
   }
   .mh-toolbar {
     flex-direction: column;
@@ -6535,10 +6546,10 @@ body.app-theme .activity-empty-msg {
   overflow-y: auto !important;
   background: var(--paper, #F6F3EC) !important;
   padding: 16px !important;
-  padding-top: calc(16px + env(safe-area-inset-top, 0px)) !important;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
-  padding-left: calc(16px + env(safe-area-inset-left, 0px)) !important;
-  padding-right: calc(16px + env(safe-area-inset-right, 0px)) !important;
+  padding-top: calc(16px + var(--sat)) !important;
+  padding-bottom: calc(24px + var(--sab)) !important;
+  padding-left: calc(16px + var(--sal)) !important;
+  padding-right: calc(16px + var(--sar)) !important;
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -6733,7 +6744,7 @@ body.app-theme .pw-toggle-btn:hover {
     max-height: 85dvh !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
-    padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px)) 16px !important;
+    padding: 20px 16px calc(24px + var(--safe-bottom)) 16px !important;
     margin: auto !important;
   }
 }
